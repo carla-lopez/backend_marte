@@ -31,3 +31,21 @@ def login(request: LoginRequest):
             "rol": "Alumno"
         }
     }
+    
+# 1. El molde de los datos que esperamos recibir de Flutter
+class RMRequest(BaseModel):
+    usuario: str
+    ejercicio: str
+    peso: float
+
+# 2. La nueva ruta para guardar el récord
+@app.post("/guardar_rm")
+def guardar_rm(request: RMRequest):
+    print(f"💪 ¡Récord recibido en la nube! {request.usuario} levantó {request.peso}kg en {request.ejercicio}")
+    
+    # Por ahora le avisamos a la app que llegó bien. 
+    # En el próximo paso acá metemos el código para guardarlo en la tabla de MySQL.
+    return {
+        "success": True, 
+        "mensaje": "¡Récord guardado exitosamente en el servidor!"
+    }
