@@ -82,10 +82,8 @@ def obtener_historial(usuario: str = "Carla"):
         if not conexion:
             return {"success": False, "mensaje": "Error de conexión con la base de datos"}
             
-        # Usamos dictionary=True para que nos devuelva los datos en formato clave-valor (JSON)
         cursor = conexion.cursor(dictionary=True)
         
-        # Hacemos la consulta uniendo las tablas para buscar por el nombre del usuario
         sql = """
         SELECT r.id, r.ejercicio, r.peso_levantado, r.repeticiones, r.rm_calculado, r.fecha
         FROM records_rm r
@@ -100,7 +98,6 @@ def obtener_historial(usuario: str = "Carla"):
         cursor.close()
         conexion.close()
         
-        # Retornamos la lista de récords a la app
         return {
             "success": True, 
             "historial": historial
@@ -112,3 +109,80 @@ def obtener_historial(usuario: str = "Carla"):
             "success": False, 
             "mensaje": f"No se pudo obtener el historial: {e}"
         }
+
+# RUTA PARA OBTENER LA PLANIFICACIÓN (DATOS SIMULADOS ESTILO EXCEL)
+@app.get("/rutina/{alumno_id}")
+def obtener_rutina(alumno_id: int):
+    return {
+        "info_rutina": {
+            "microciclo": "Fuerza y Acondicionamiento",
+            "semanas_transcurridas": 1
+        },
+        "dias": [
+            {
+                "numero_dia": 1,
+                "duracion_minutos": 60,
+                "notas_atleta": "3 rondas: 5+5 rotaciones, 6 curl squat...",
+                "bloques": [
+                    {
+                        "nombre_bloque": "BLOQUE A - SENTADILLA",
+                        "ejercicios": [
+                            {
+                                "id_ejercicio": 101,
+                                "nombre_ejercicio": "Back Squat con pausa + Back Squat",
+                                "series": 4, 
+                                "reps": "2+2",
+                                "rpe_objetivo": "8",
+                                "pausa": "2 MIN",
+                                "modalidad": "Normal",
+                                "anotaciones": "Pausa de 2 seg en el fondo. Mantener el core firme.",
+                                "link_yt": "https://youtube.com/watch?v=12345",
+                                "es_wod": False
+                            }
+                        ]
+                    },
+                    {
+                        "nombre_bloque": "BLOQUE B - EMPUJE",
+                        "ejercicios": [
+                            {
+                                "id_ejercicio": 102,
+                                "nombre_ejercicio": "Prensa",
+                                "series": 3,
+                                "reps": "8",
+                                "rpe_objetivo": "8",
+                                "pausa": "2 MIN",
+                                "modalidad": "Normal",
+                                "anotaciones": "No bloquear las rodillas al extender.",
+                                "link_yt": "",
+                                "es_wod": False
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "numero_dia": 2,
+                "duracion_minutos": 45,
+                "notas_atleta": "Día enfocado en tren superior.",
+                "bloques": [
+                    {
+                        "nombre_bloque": "BLOQUE A - EMPUJE HORIZONTAL",
+                        "ejercicios": [
+                            {
+                                "id_ejercicio": 103,
+                                "nombre_ejercicio": "Banco Plano con pausa",
+                                "series": 4,
+                                "reps": "4",
+                                "rpe_objetivo": "8",
+                                "pausa": "2 MIN",
+                                "modalidad": "Normal",
+                                "anotaciones": "Pausa de 1 seg en el pecho.",
+                                "link_yt": "",
+                                "es_wod": False
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
