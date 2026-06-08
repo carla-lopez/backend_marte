@@ -17,7 +17,7 @@ def obtener_conexion():
         return None
 
 def inicializar_base_de_datos():
-    """Crea las tablas necesarias e inserta datos iniciales de prueba."""
+    """Crea las tablas necesarias e inserta datos iniciales de prueba en el orden correcto."""
     conexion = obtener_conexion()
     if not conexion:
         return
@@ -47,7 +47,7 @@ def inicializar_base_de_datos():
     );
     """
 
-    # 3. Tabla de Historial de RMs
+    # 3. Tabla de Historial de RMs (Depende de usuarios)
     tabla_records = """
     CREATE TABLE IF NOT EXISTS records_rm (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -60,18 +60,90 @@ def inicializar_base_de_datos():
         FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE CASCADE
     );
     """
+    
+    # --- TABLAS DE LA PLANIFICACIÓN (Basadas en el boceto del profesor) ---
 
-    # 4. Usuario semilla para evitar fallos de clave foránea
+    # 4. El Plan General (Padre)
+    tabla_planes = """
+    CREATE TABLE IF NOT EXISTS planes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        descripcion TEXT,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """
+
+    # 5. Las Semanas del Plan (Hijo - Depende de planes)
+    tabla_semanas = """
+    CREATE TABLE IF NOT EXISTS plan_semanas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        id_plan INT NOT NULL,
+        numero_semana INT NOT NULL,
+        objetivo VARCHAR(255),
+        FOREIGN KEY (id_plan) REFERENCES planes(id) ON DELETE CASCADE
+    );
+    """
+
+    # 6. Los Días de la Semana (Nieto - Depende de plan_semanas) -> Pestañas Día 1, Día 2...
+    tabla_dias = """
+    CREATE TABLE IF NOT EXISTS plan_dias (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        id_semana INT NOT NULL,
+        numero_dia INT NOT NULL,
+        nombre_dia VARCHAR(50), 
+        FOREIGN KEY (id_semana) REFERENCES plan_semanas(id) ON DELETE CASCADE
+    );
+    """
+
+    # 7. Los Bloques del Día (Bisnieto - Depende de plan_dias) -> Bloque 1, Bloque 2...
+    tabla_bloques = """
+    CREATE TABLE IF NOT EXISTS plan_bloques (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        id_dia INT NOT NULL,
+        nombre_bloque VARCHAR(100) NOT NULL,
+        orden INT NOT NULL,
+        FOREIGN KEY (id_dia) REFERENCES plan_dias(id) ON DELETE CASCADE
+    );
+    """
+
+    # 8. Los Ejercicios (Tataranieto - Depende de plan_bloques) -> Detalle final con series, reps, etc.
+    tabla_ejercicios = """
+    CREATE TABLE IF NOT EXISTS plan_ejercicios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        id_bloque INT NOT NULL,
+        nombre_ejercicio VARCHAR(100) NOT NULL,
+        series VARCHAR(20),
+        reps VARCHAR(20),
+        rpe VARCHAR(20),
+        pausa VARCHAR(50),
+        modalidad VARCHAR(50),
+        link_yt VARCHAR(255),
+        anotaciones TEXT,
+        orden INT NOT NULL,
+        FOREIGN KEY (id_bloque) REFERENCES plan_bloques(id) ON DELETE CASCADE
+    );
+    """
+
+    # Usuario semilla para evitar fallos de clave foránea en pruebas locales/remotas
     usuario_defecto = """
     INSERT IGNORE INTO usuarios (id, nombre, email, password, rol) 
     VALUES (1, 'Carla', 'carla@marte.com', '1234', 'Admin');
     """
 
     try:
+        # Ejecución secuencial estricta para respetar integridad referencial
         cursor.execute(tabla_usuarios)
         cursor.execute(tabla_wods)
         cursor.execute(tabla_records)
-        cursor.execute(usuario_defecto) # Creamos el usuario base si no existe
+        
+        cursor.execute(tabla_planes)
+        cursor.execute(tabla_semanas)
+        cursor.execute(tabla_dias)
+        cursor.execute(tabla_bloques)
+        cursor.execute(tabla_ejercicios)
+        
+        cursor.execute(usuario_defecto)
+        
         conexion.commit()
         print("✅ Base de datos, tablas y datos iniciales verificados con éxito.")
     except Error as e:
