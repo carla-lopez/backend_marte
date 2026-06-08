@@ -72,3 +72,43 @@ def guardar_rm(request: RMRequest):
             "success": False, 
             "mensaje": f"No se pudo guardar el récord en la base de datos: {e}"
         }
+        
+# RUTA PARA OBTENER EL HISTORIAL DE RÉCORDS
+@app.get("/historial_rm")
+def obtener_historial(usuario: str = "Carla"):
+    print(f"🔍 Buscando el historial de RMs para: {usuario}")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión con la base de datos"}
+            
+        # Usamos dictionary=True para que nos devuelva los datos en formato clave-valor (JSON)
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Hacemos la consulta uniendo las tablas para buscar por el nombre del usuario
+        sql = """
+        SELECT r.id, r.ejercicio, r.peso_levantado, r.repeticiones, r.rm_calculado, r.fecha
+        FROM records_rm r
+        JOIN usuarios u ON r.id_usuario = u.id
+        WHERE u.nombre = %s
+        ORDER BY r.fecha DESC, r.id DESC
+        """
+        
+        cursor.execute(sql, (usuario,))
+        historial = cursor.fetchall()
+        
+        cursor.close()
+        conexion.close()
+        
+        # Retornamos la lista de récords a la app
+        return {
+            "success": True, 
+            "historial": historial
+        }
+        
+    except Exception as e:
+        print(f"❌ Error al consultar el historial: {e}")
+        return {
+            "success": False, 
+            "mensaje": f"No se pudo obtener el historial: {e}"
+        }
