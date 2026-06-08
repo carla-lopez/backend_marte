@@ -2,14 +2,14 @@ import mysql.connector
 from mysql.connector import Error
 
 def obtener_conexion():
-    """Establece y devuelve la conexión con la base de datos MySQL."""
+    """Establece y devuelve la conexión con la base de datos MySQL en Railway."""
     try:
         conexion = mysql.connector.connect(
-            host='acela.proxy.rlwy.net',  # Cambia esto si tu MySQL no está alojado en Railway
-            port='42641',  # Puerto por defecto de MySQL
-            user='root',        # Ajustalo con tu usuario de MySQL (por defecto 'root')
-            password='AAbZPSnDcdNeJTOdJRdGAbvpGccsIpEh',        # Ajustalo con tu contraseña de MySQL
-            database='railway'     # Ajustalo con el nombre de tu base de datos (en este caso 'railway' para el entorno de Railway)
+            host='acela.proxy.rlwy.net',  
+            port='42641',  
+            user='root',        
+            password='AAbZPSnDcdNeJTOdJRdGAbvpGccsIpEh',        
+            database='railway'     
         )
         return conexion
     except Error as e:
@@ -17,23 +17,7 @@ def obtener_conexion():
         return None
 
 def inicializar_base_de_datos():
-    """Crea las tablas necesarias si no existen en el sistema."""
-    # Primero nos conectamos sin especificar la BD para asegurarnos de que exista
-    try:
-        conexion_inicial = mysql.connector.connect(
-            host='localhost',
-            user='root',
-            password='1234'
-        )
-        cursor = conexion_inicial.cursor()
-        cursor.execute("CREATE DATABASE IF NOT EXISTS marte_training")
-        cursor.close()
-        conexion_inicial.close()
-    except Error as e:
-        print(f"❌ Error al verificar/crear la base de datos: {e}")
-        return
-
-    # Ahora sí nos conectamos a nuestra base de datos para armar las tablas
+    """Crea las tablas necesarias e inserta datos iniciales de prueba."""
     conexion = obtener_conexion()
     if not conexion:
         return
@@ -77,12 +61,19 @@ def inicializar_base_de_datos():
     );
     """
 
+    # 4. Usuario semilla para evitar fallos de clave foránea
+    usuario_defecto = """
+    INSERT IGNORE INTO usuarios (id, nombre, email, password, rol) 
+    VALUES (1, 'Carla', 'carla@marte.com', '1234', 'Admin');
+    """
+
     try:
         cursor.execute(tabla_usuarios)
         cursor.execute(tabla_wods)
         cursor.execute(tabla_records)
+        cursor.execute(usuario_defecto) # Creamos el usuario base si no existe
         conexion.commit()
-        print("✅ Base de datos y tablas verificadas/creadas con éxito.")
+        print("✅ Base de datos, tablas y datos iniciales verificados con éxito.")
     except Error as e:
         print(f"❌ Error al estructurar las tablas: {e}")
     finally:
