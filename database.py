@@ -5,10 +5,11 @@ def obtener_conexion():
     """Establece y devuelve la conexión con la base de datos MySQL."""
     try:
         conexion = mysql.connector.connect(
-            host='localhost',
+            host='acela.proxy.rlwy.net',  # Cambia esto si tu MySQL no está alojado en Railway
+            port='42641',  # Puerto por defecto de MySQL
             user='root',        # Ajustalo con tu usuario de MySQL (por defecto 'root')
-            password='1234',        # Ajustalo con tu contraseña de MySQL
-            database='marte_training'
+            password='AAbZPSnDcdNeJTOdJRdGAbvpGccsIpEh',        # Ajustalo con tu contraseña de MySQL
+            database='railway'     # Ajustalo con el nombre de tu base de datos (en este caso 'railway' para el entorno de Railway)
         )
         return conexion
     except Error as e:
