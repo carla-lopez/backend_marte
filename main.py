@@ -452,3 +452,74 @@ def crear_alumno(request: AltaAlumnoRequest):
     except Exception as e:
         print(f"❌ Error al crear alumno: {e}")
         return {"success": False, "mensaje": "El email ya está registrado o los datos son inválidos."}
+    
+# --- MODELO PARA AGREGAR UN EJERCICIO DESDE EL CELU ---
+class AgregarEjercicioRequest(BaseModel):
+    id_plan: int
+    numero_semana: int
+    numero_dia: int
+    nombre_bloque: str  # Ej: "BLOQUE A - FUERZA"
+    nombre_ejercicio: str
+    series: str
+    reps: str
+    rpe: str
+    pausa: str
+    modalidad: str  # Normal, AMRAP, EMOM...
+    anotaciones: str
+
+@app.post("/profesor/agregar_ejercicio")
+def agregar_ejercicio_plan(request: AgregarEjercicioRequest):
+    print(f"🏋️ Profe agregando ejercicio a Plan {request.id_plan}, Día {request.numero_dia}")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de base de datos"}
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # 1. Buscar o Crear la Semana
+        cursor.execute("SELECT id FROM plan_semanas WHERE id_plan = %s AND numero_semana = %s", (request.id_plan, request.numero_semana))
+        semana = cursor.fetchone()
+        if semana:
+            id_semana = semana['id']
+        else:
+            cursor.execute("INSERT INTO plan_semanas (id_plan, numero_semana, objetivo) VALUES (%s, %s, 'Planificación Express')", (request.id_plan, request.numero_semana))
+            id_semana = cursor.lastrowid
+
+        # 2. Buscar o Crear el Día
+        cursor.execute("SELECT id FROM plan_dias WHERE id_semana = %s AND numero_dia = %s", (id_semana, request.numero_dia))
+        dia = cursor.fetchone()
+        if dia:
+            id_dia = dia['id']
+        else:
+            cursor.execute("INSERT INTO plan_dias (id_semana, numero_dia, nombre_dia) VALUES (%s, %s, %s)", (id_semana, request.numero_dia, f"Día {request.numero_dia}"))
+            id_dia = cursor.lastrowid
+
+        # 3. Buscar o Crear el Bloque
+        cursor.execute("SELECT id FROM plan_bloques WHERE id_dia = %s AND nombre_bloque = %s", (id_dia, request.nombre_bloque.upper()))
+        bloque = cursor.fetchone()
+        if bloque:
+            id_bloque = bloque['id']
+        else:
+            cursor.execute("INSERT INTO plan_bloques (id_dia, nombre_bloque, orden) VALUES (%s, %s, 1)", (id_dia, request.nombre_bloque.upper()))
+            id_bloque = cursor.lastrowid
+
+        # 4. Insertar el Ejercicio Final
+        sql_ejercicio = """
+        INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, anotaciones, orden)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1)
+        """
+        valores = (
+            id_bloque, request.nombre_ejercicio, request.series, request.reps,
+            request.rpe, request.pausa, request.modalidad, request.anotaciones
+        )
+        cursor.execute(sql_ejercicio, valores)
+        
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "¡Ejercicio acoplado al plan con éxito!"}
+        
+    except Exception as e:
+        print(f"❌ Error al planificar: {e}")
+        return {"success": False, "mensaje": str(e)}
