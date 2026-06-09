@@ -228,6 +228,22 @@ def inicializar_base_de_datos():
         except Error:
             pass  # Si ya existen, pasa de largo sin chistar
         
+        # 6. Tabla de Historial de Ciclos Asignados
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS historial_rutinas (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                id_alumno INT,
+                id_plan INT,
+                nombre_ciclo VARCHAR(100),
+                fecha_asignacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conexion.commit()
+            print("  ✅ Tabla 'historial_rutinas' lista.")
+        except Error as e:
+            print(f"  ❌ Error en historial_rutinas: {e}")
+        
         # Creamos un alumno de prueba (ID 2)
         alumno_prueba = """
         INSERT IGNORE INTO usuarios (id, nombre, email, password, rol, fecha_pago, id_plan) 

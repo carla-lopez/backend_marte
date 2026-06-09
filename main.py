@@ -753,28 +753,98 @@ def obtener_ejercicios_plan(plan_id: int):
     
 class AsignarPlanRequest(BaseModel):
     alumno_id: int
-    plan_id: int
+    plan_id: int  # ID de la Plantilla Maestra elegida
     categoria: str
 
 @app.put("/profesor/asignar_plan")
-def asignar_plan(request: AsignarPlanRequest):
+def asignar_plantilla_clonada(request: AsignarPlanRequest):
+    print(f"👥 Clonando plantilla ID {request.plan_id} para alumno ID {request.alumno_id}")
     try:
         conexion = database.obtener_conexion()
-        cursor = conexion.cursor()
+        cursor = conexion.cursor(dictionary=True)
         
-        # Actualizamos plan, categoría y reseteamos semana a 1
-        sql = """
-        UPDATE usuarios 
-        SET id_plan = %s, categoria = %s, semana_actual = 1 
-        WHERE id = %s
+        # 1. Traer nombre del alumno y nombre de la plantilla
+        cursor.execute("SELECT nombre FROM usuarios WHERE id = %s", (request.alumno_id,))
+        alumno = cursor.fetchone()
+        cursor.execute("SELECT nombre FROM planes WHERE id = %s", (request.plan_id,))
+        plantilla = cursor.fetchone()
+        
+        if not alumno or not plantilla:
+            return {"success": False, "mensaje": "Alumno o plantilla no encontrados"}
+            
+        # Generar sufijo de fecha (Ej: "Junio 2026")
+        meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+        mes_actual = meses[datetime.now().month - 1]
+        anio_actual = datetime.now().year
+        nombre_clonado = f"Rutina: {plantilla['nombre']} - {alumno['nombre']} ({mes_actual} {anio_actual})"
+        
+        # 2. Crear el nuevo plan individual en la tabla 'planes'
+        cursor.execute("INSERT INTO planes (nombre, categoria) VALUES (%s, %s)", (nombre_clonado, request.categoria))
+        nuevo_plan_id = cursor.lastrowid
+        
+        # 3. Traer todos los ejercicios de la plantilla original
+        sql_ejercicios_plantilla = """
+        SELECT 
+            ps.numero_semana, pd.numero_dia, pb.nombre_bloque,
+            pe.nombre_ejercicio, pe.series, pe.reps, pe.rpe, pe.pausa, pe.modalidad, pe.anotaciones
+        FROM plan_semanas ps
+        JOIN plan_dias pd ON ps.id = pd.id_semana
+        JOIN plan_bloques pb ON pd.id = pb.id_dia
+        JOIN plan_ejercicios pe ON pb.id = pe.id_bloque
+        WHERE ps.id_plan = %s
         """
-        cursor.execute(sql, (request.plan_id, request.categoria, request.alumno_id))
-        conexion.commit()
+        cursor.execute(sql_ejercicios_plantilla, (request.plan_id,))
+        ejercicios_a_copiar = cursor.fetchall()
         
+        # Iteramos y copiamos
+        for ej in ejercicios_a_copiar:
+            # --- SEMANAS ---
+            cursor.execute("SELECT id FROM plan_semanas WHERE id_plan = %s AND numero_semana = %s", (nuevo_plan_id, ej['numero_semana']))
+            semana_row = cursor.fetchone()
+            
+            if not semana_row:  # 💡 ACÁ ESTÁ CORREGIDO EL ERROR
+                cursor.execute("INSERT INTO plan_semanas (id_plan, numero_semana) VALUES (%s, %s)", (nuevo_plan_id, ej['numero_semana']))
+                id_semana_nueva = cursor.lastrowid
+            else:
+                id_semana_nueva = semana_row['id']
+                
+            # --- DÍAS ---
+            cursor.execute("SELECT id FROM plan_dias WHERE id_semana = %s AND numero_dia = %s", (id_semana_nueva, ej['numero_dia']))
+            dia_row = cursor.fetchone()
+            
+            if not dia_row:
+                cursor.execute("INSERT INTO plan_dias (id_semana, numero_dia) VALUES (%s, %s)", (id_semana_nueva, ej['numero_dia']))
+                id_dia_nuevo = cursor.lastrowid
+            else:
+                id_dia_nuevo = dia_row['id']
+                
+            # --- BLOQUES ---
+            cursor.execute("SELECT id FROM plan_bloques WHERE id_dia = %s AND nombre_bloque = %s", (id_dia_nuevo, ej['nombre_bloque']))
+            bloque_row = cursor.fetchone()
+            
+            if not bloque_row:
+                cursor.execute("INSERT INTO plan_bloques (id_dia, nombre_bloque) VALUES (%s, %s)", (id_dia_nuevo, ej['nombre_bloque']))
+                id_bloque_nuevo = cursor.lastrowid
+            else:
+                id_bloque_nuevo = bloque_row['id']
+                
+            # --- EJERCICIOS ---
+            sql_ins_ej = """
+            INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, anotaciones)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql_ins_ej, (id_bloque_nuevo, ej['nombre_ejercicio'], ej['series'], ej['reps'], ej['rpe'], ej['pausa'], ej['modalidad'], ej['anotaciones']))
+
+        # 4. Enlazar el plan clonado al alumno y registrar en el historial
+        cursor.execute("UPDATE usuarios SET id_plan = %s, categoria = %s, semana_actual = 1 WHERE id = %s", (nuevo_plan_id, request.categoria, request.alumno_id))
+        cursor.execute("INSERT INTO historial_rutinas (id_alumno, id_plan, nombre_ciclo) VALUES (%s, %s, %s)", (request.alumno_id, nuevo_plan_id, nombre_clonado))
+        
+        conexion.commit()
         cursor.close()
         conexion.close()
-        return {"success": True, "mensaje": "Plan asignado y ciclo reseteado a Semana 1"}
+        return {"success": True, "mensaje": "Plantilla clonada con éxito para el ciclo actual del atleta"}
     except Exception as e:
+        print(f"❌ Error en clonación: {e}")
         return {"success": False, "mensaje": str(e)}
     
 class PlanPersonalizadoRequest(BaseModel):
