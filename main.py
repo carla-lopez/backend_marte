@@ -420,3 +420,35 @@ def obtener_alumnos_profesor():
     except Exception as e:
         print(f"❌ Error al obtener lista de alumnos: {e}")
         return {"success": False, "alumnos": []}
+    
+# --- MODELO PARA RECIBIR EL ALTA DE ALUMNO ---
+class AltaAlumnoRequest(BaseModel):
+    nombre: str
+    email: str
+    fecha_pago: str  # Formato YYYY-MM-DD que manda el calendario de Flutter
+
+@app.post("/profesor/crear_alumno")
+def crear_alumno(request: AltaAlumnoRequest):
+    print(f"👤 Registrando nuevo alumno: {request.nombre} ({request.email})")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión con la base de datos"}
+            
+        cursor = conexion.cursor()
+        
+        # Insertamos el usuario con rol 'Alumno' y contraseña inicial '1234' por defecto
+        sql = """
+        INSERT INTO usuarios (nombre, email, password, rol, fecha_pago, id_plan)
+        VALUES (%s, %s, '1234', 'Alumno', %s, 1)
+        """
+        cursor.execute(sql, (request.nombre, request.email, request.fecha_pago))
+        conexion.commit()
+        
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "¡Alumno registrado con éxito!"}
+        
+    except Exception as e:
+        print(f"❌ Error al crear alumno: {e}")
+        return {"success": False, "mensaje": "El email ya está registrado o los datos son inválidos."}
