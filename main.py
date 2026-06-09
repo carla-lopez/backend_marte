@@ -252,36 +252,47 @@ def inyectar_datos():
     except Exception as e:
         return {"success": False, "mensaje": f"❌ Error: {e}"}
 
-# --- RUTA REAL PARA OBTENER LA PLANIFICACIÓN DESDE MYSQL ---
+# --- RUTA DE RUTINA ACTUALIZADA CON CONTROL DE CANDADO ---
 @app.get("/rutina/{alumno_id}")
 def obtener_rutina(alumno_id: int):
-    print(f"📅 Buscando rutina real en MySQL para el alumno ID: {alumno_id}")
+    print(f"📅 Verificando acceso y rutina para el alumno ID: {alumno_id}")
     try:
         conexion = database.obtener_conexion()
         if not conexion:
-            return {"info_rutina": {}, "dias": []}
+            return {"membresia": {"status": "Error"}, "info_rutina": {}, "dias": []}
             
         cursor = conexion.cursor(dictionary=True)
         
-        # Súper Consulta SQL: Unimos las 5 tablas respetando la jerarquía
+        # 1. PASO CLAVE: Consultar la fecha de pago del alumno primero
+        cursor.execute("SELECT fecha_pago FROM usuarios WHERE id = %s", (alumno_id,))
+        usuario = cursor.fetchone()
+        
+        membresia = {"status": "Al Día", "dias_restantes": 30}
+        if usuario and usuario['fecha_pago']:
+            dias_pasados = (date.today() - usuario['fecha_pago']).days
+            dias_restantes = 30 - dias_pasados
+            
+            if dias_restantes < 0:
+                membresia = {"status": "Vencido", "dias_restantes": dias_restantes}
+            elif dias_restantes <= 3:
+                membresia = {"status": "Por Vencer", "dias_restantes": dias_restantes}
+            else:
+                membresia = {"status": "Al Día", "dias_restantes": dias_restantes}
+        else:
+            membresia = {"status": "Vencido", "dias_restantes": 0}
+
+        # 2. Si está vencido, cortamos acá y no gastamos recursos en buscar la rutina
+        if membresia["status"] == "Vencido":
+            cursor.close()
+            conexion.close()
+            return {"membresia": membresia, "info_rutina": {}, "dias": []}
+
+        # 3. Si tiene acceso, traemos la rutina relacional completa
         sql = """
         SELECT 
-            p.nombre AS nombre_plan,
-            ps.numero_semana,
-            pd.numero_dia,
-            pd.nombre_dia,
-            pb.id AS bloque_id,
-            pb.nombre_bloque,
-            pe.id AS ejercicio_id,
-            pe.nombre_ejercicio,
-            pe.series,
-            pe.reps,
-            pe.rpe,
-            pe.pausa,
-            pe.modalidad,
-            pe.link_yt,
-            pe.anotaciones,
-            pe.orden AS orden_ejercicio
+            p.nombre AS nombre_plan, ps.numero_semana, pd.numero_dia, pd.nombre_dia,
+            pb.id AS bloque_id, pb.nombre_bloque, pe.id AS ejercicio_id, pe.nombre_ejercicio,
+            pe.series, pe.reps, pe.rpe, pe.pausa, pe.modalidad, pe.link_yt, pe.anotaciones
         FROM planes p
         JOIN plan_semanas ps ON p.id = ps.id_plan
         JOIN plan_dias pd ON ps.id = pd.id_semana
@@ -289,29 +300,23 @@ def obtener_rutina(alumno_id: int):
         JOIN plan_ejercicios pe ON pb.id = pe.id_bloque
         ORDER BY pd.numero_dia, pb.orden, pe.orden
         """
-        
         cursor.execute(sql)
         resultados = cursor.fetchall()
         
         cursor.close()
         conexion.close()
 
-        # Si no hay datos, devolvemos la estructura vacía para que Flutter no falle
         if not resultados:
-            return {"info_rutina": {}, "dias": []}
+            return {"membresia": membresia, "info_rutina": {}, "dias": []}
 
-        # 1. Armamos la cabecera (Microciclo y Semana)
         info_rutina = {
             "microciclo": resultados[0]['nombre_plan'],
             "semanas_transcurridas": resultados[0]['numero_semana']
         }
 
-        # 2. Agrupamos los datos usando diccionarios de Python
         dias_dict = {}
         for fila in resultados:
             dia_id = fila['numero_dia']
-            
-            # Creamos el Día si todavía no existe en nuestro diccionario
             if dia_id not in dias_dict:
                 dias_dict[dia_id] = {
                     "numero_dia": dia_id,
@@ -321,18 +326,14 @@ def obtener_rutina(alumno_id: int):
                 }
 
             bloque_id = fila['bloque_id']
-            
-            # Creamos el Bloque dentro del Día si todavía no existe
             if bloque_id not in dias_dict[dia_id]['bloques']:
                 dias_dict[dia_id]['bloques'][bloque_id] = {
                     "nombre_bloque": fila['nombre_bloque'],
                     "ejercicios": []
                 }
 
-            # Evaluamos si es un WOD/CrossFit según la modalidad
             es_wod = fila['modalidad'].upper() in ['AMRAP', 'EMOM', 'FOR TIME']
 
-            # Empaquetamos el Ejercicio
             ejercicio = {
                 "id_ejercicio": fila['ejercicio_id'],
                 "nombre_ejercicio": fila['nombre_ejercicio'],
@@ -345,24 +346,22 @@ def obtener_rutina(alumno_id: int):
                 "link_yt": fila['link_yt'] if fila['link_yt'] else "",
                 "es_wod": es_wod
             }
-            
-            # Lo metemos en su bloque correspondiente
             dias_dict[dia_id]['bloques'][bloque_id]['ejercicios'].append(ejercicio)
 
-        # 3. Convertimos los diccionarios internos a listas para enviarlo como JSON limpio
         dias_list = []
         for d in dias_dict.values():
             d['bloques'] = list(d['bloques'].values())
             dias_list.append(d)
 
         return {
+            "membresia": membresia, # Le adjuntamos las llaves del candado
             "info_rutina": info_rutina,
             "dias": dias_list
         }
 
     except Exception as e:
-        print(f"❌ Error al armar la rutina: {e}")
-        return {"info_rutina": {}, "dias": []}
+        print(f"❌ Error al armar rutina: {e}")
+        return {"membresia": {"status": "Error"}, "info_rutina": {}, "dias": []}
     
 # --- NUEVA RUTA PARA EL PANEL DEL PROFESOR: LISTAR ALUMNOS ---
 @app.get("/profesor/alumnos")
