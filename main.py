@@ -698,3 +698,38 @@ def crear_plan(request: CrearPlanRequest):
     except Exception as e:
         print(f"❌ Error al crear plan: {e}")
         return {"success": False, "mensaje": str(e)}
+    
+# --- RUTA PARA VER LOS EJERCICIOS DE UN PLAN ESPECÍFICO ---
+@app.get("/profesor/plan/{plan_id}/ejercicios")
+def obtener_ejercicios_plan(plan_id: int):
+    print(f"🔍 Buscando radiografía de ejercicios para el plan ID: {plan_id}")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return []
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Unimos todas las tablas hijas para traer el mapa completo del plan
+        sql = """
+        SELECT 
+            ps.numero_semana, pd.numero_dia,
+            pb.nombre_bloque,
+            pe.id, pe.nombre_ejercicio, pe.series, pe.reps, pe.modalidad
+        FROM plan_semanas ps
+        JOIN plan_dias pd ON ps.id = pd.id_semana
+        JOIN plan_bloques pb ON pd.id = pb.id_dia
+        JOIN plan_ejercicios pe ON pb.id = pe.id_bloque
+        WHERE ps.id_plan = %s
+        ORDER BY ps.numero_semana ASC, pd.numero_dia ASC, pb.id ASC, pe.id ASC
+        """
+        cursor.execute(sql, (plan_id,))
+        ejercicios = cursor.fetchall()
+        
+        cursor.close()
+        conexion.close()
+        return ejercicios
+        
+    except Exception as e:
+        print(f"❌ Error al cargar ejercicios del plan {plan_id}: {e}")
+        return []
