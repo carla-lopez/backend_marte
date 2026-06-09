@@ -189,6 +189,67 @@ def obtener_pesos_sesion(alumno_id: int, nombre_ejercicio: str):
     except Exception as e:
         print(f"❌ Error al obtener pesos: {e}")
         return {"success": False, "pesos": []}
+    
+# --- RUTA TEMPORAL PARA INYECTAR LOS DATOS DEL BOCETO ---
+@app.get("/inyectar_datos_prueba")
+def inyectar_datos():
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Sin conexión a BD"}
+            
+        cursor = conexion.cursor()
+
+        # 1. Crear el Plan
+        cursor.execute("INSERT INTO planes (nombre, descripcion) VALUES ('Fuerza y Acondicionamiento', 'Microciclo Base')")
+        id_plan = cursor.lastrowid
+
+        # 2. Crear la Semana (Conectada al Plan)
+        cursor.execute("INSERT INTO plan_semanas (id_plan, numero_semana, objetivo) VALUES (%s, 1, 'Adaptación')", (id_plan,))
+        id_semana = cursor.lastrowid
+
+        # 3. Crear Día 1 y Día 2 (Conectados a la Semana)
+        cursor.execute("INSERT INTO plan_dias (id_semana, numero_dia, nombre_dia) VALUES (%s, 1, 'Lunes')", (id_semana,))
+        id_dia1 = cursor.lastrowid
+        
+        cursor.execute("INSERT INTO plan_dias (id_semana, numero_dia, nombre_dia) VALUES (%s, 2, 'Martes')", (id_semana,))
+        id_dia2 = cursor.lastrowid
+
+        # 4. Crear Bloques para el Día 1 (Conectados al Día 1)
+        cursor.execute("INSERT INTO plan_bloques (id_dia, nombre_bloque, orden) VALUES (%s, 'BLOQUE A - SENTADILLA', 1)", (id_dia1,))
+        id_bloque1_A = cursor.lastrowid
+
+        cursor.execute("INSERT INTO plan_bloques (id_dia, nombre_bloque, orden) VALUES (%s, 'BLOQUE B - EMPUJE', 2)", (id_dia1,))
+        id_bloque1_B = cursor.lastrowid
+
+        # 5. Insertar Ejercicios Día 1 (Conectados a sus respectivos Bloques)
+        cursor.execute("""
+            INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, link_yt, anotaciones, orden) 
+            VALUES (%s, 'Back Squat con pausa + Back Squat', '4', '2+2', '8', '2 MIN', 'Normal', 'https://youtube.com/...', 'Pausa de 2 seg en el fondo. Mantener el core firme.', 1)
+        """, (id_bloque1_A,))
+
+        cursor.execute("""
+            INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, link_yt, anotaciones, orden) 
+            VALUES (%s, 'Prensa', '3', '8', '8', '2 MIN', 'Normal', '', 'No bloquear las rodillas al extender.', 1)
+        """, (id_bloque1_B,))
+
+        # 6. Crear Bloque y Ejercicio para el Día 2
+        cursor.execute("INSERT INTO plan_bloques (id_dia, nombre_bloque, orden) VALUES (%s, 'BLOQUE A - EMPUJE HORIZONTAL', 1)", (id_dia2,))
+        id_bloque2_A = cursor.lastrowid
+
+        cursor.execute("""
+            INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, link_yt, anotaciones, orden) 
+            VALUES (%s, 'Banco Plano con pausa', '4', '4', '8', '2 MIN', 'Normal', '', 'Pausa de 1 seg en el pecho.', 1)
+        """, (id_bloque2_A,))
+
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+
+        return {"success": True, "mensaje": "✅ ¡Datos del boceto inyectados a la perfección en MySQL!"}
+
+    except Exception as e:
+        return {"success": False, "mensaje": f"❌ Error: {e}"}
 
 # RUTA PARA OBTENER LA PLANIFICACIÓN (DATOS SIMULADOS ESTILO EXCEL)
 @app.get("/rutina/{alumno_id}")
