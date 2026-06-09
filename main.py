@@ -653,8 +653,8 @@ def obtener_planes_maestros():
             
         cursor = conexion.cursor(dictionary=True)
         
-        # Traemos las plantillas de planes globales creadas por el profesor
-        cursor.execute("SELECT id, nombre, descripcion, fecha_creacion FROM planes ORDER BY id DESC")
+        # Traemos las plantillas incluyendo su categoría
+        cursor.execute("SELECT id, nombre, descripcion, categoria, fecha_creacion FROM planes ORDER BY id DESC")
         planes = cursor.fetchall()
         
         cursor.close()

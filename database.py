@@ -211,6 +211,14 @@ def inicializar_base_de_datos():
         except Error:
             pass  # Si ya existe, pasa de largo sin chistar
         
+        # 4. Intentamos agregar la categoría a los planes
+        try:
+            cursor.execute("ALTER TABLE planes ADD COLUMN categoria VARCHAR(50) DEFAULT 'Fuerza';")
+            conexion.commit()
+            print("  ✅ Columna 'categoria' en planes añadida con éxito.")
+        except Error:
+            pass  # Si ya existe, pasa de largo sin chistar
+        
         # Creamos un alumno de prueba (ID 2)
         alumno_prueba = """
         INSERT IGNORE INTO usuarios (id, nombre, email, password, rol, fecha_pago, id_plan) 
