@@ -251,79 +251,114 @@ def inyectar_datos():
     except Exception as e:
         return {"success": False, "mensaje": f"❌ Error: {e}"}
 
-# RUTA PARA OBTENER LA PLANIFICACIÓN (DATOS SIMULADOS ESTILO EXCEL)
+# --- RUTA REAL PARA OBTENER LA PLANIFICACIÓN DESDE MYSQL ---
 @app.get("/rutina/{alumno_id}")
 def obtener_rutina(alumno_id: int):
-    return {
-        "info_rutina": {
-            "microciclo": "Fuerza y Acondicionamiento",
-            "semanas_transcurridas": 1
-        },
-        "dias": [
-            {
-                "numero_dia": 1,
-                "duracion_minutos": 60,
-                "notas_atleta": "3 rondas: 5+5 rotaciones, 6 curl squat...",
-                "bloques": [
-                    {
-                        "nombre_bloque": "BLOQUE A - SENTADILLA",
-                        "ejercicios": [
-                            {
-                                "id_ejercicio": 101,
-                                "nombre_ejercicio": "Back Squat con pausa + Back Squat",
-                                "series": 4, 
-                                "reps": "2+2",
-                                "rpe_objetivo": "8",
-                                "pausa": "2 MIN",
-                                "modalidad": "Normal",
-                                "anotaciones": "Pausa de 2 seg en el fondo. Mantener el core firme.",
-                                "link_yt": "https://youtube.com/watch?v=12345",
-                                "es_wod": False
-                            }
-                        ]
-                    },
-                    {
-                        "nombre_bloque": "BLOQUE B - EMPUJE",
-                        "ejercicios": [
-                            {
-                                "id_ejercicio": 102,
-                                "nombre_ejercicio": "Prensa",
-                                "series": 3,
-                                "reps": "8",
-                                "rpe_objetivo": "8",
-                                "pausa": "2 MIN",
-                                "modalidad": "Normal",
-                                "anotaciones": "No bloquear las rodillas al extender.",
-                                "link_yt": "",
-                                "es_wod": False
-                            }
-                        ]
-                    }
-                ]
-            },
-            {
-                "numero_dia": 2,
-                "duracion_minutos": 45,
-                "notas_atleta": "Día enfocado en tren superior.",
-                "bloques": [
-                    {
-                        "nombre_bloque": "BLOQUE A - EMPUJE HORIZONTAL",
-                        "ejercicios": [
-                            {
-                                "id_ejercicio": 103,
-                                "nombre_ejercicio": "Banco Plano con pausa",
-                                "series": 4,
-                                "reps": "4",
-                                "rpe_objetivo": "8",
-                                "pausa": "2 MIN",
-                                "modalidad": "Normal",
-                                "anotaciones": "Pausa de 1 seg en el pecho.",
-                                "link_yt": "",
-                                "es_wod": False
-                            }
-                        ]
-                    }
-                ]
+    print(f"📅 Buscando rutina real en MySQL para el alumno ID: {alumno_id}")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"info_rutina": {}, "dias": []}
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Súper Consulta SQL: Unimos las 5 tablas respetando la jerarquía
+        sql = """
+        SELECT 
+            p.nombre AS nombre_plan,
+            ps.numero_semana,
+            pd.numero_dia,
+            pd.nombre_dia,
+            pb.id AS bloque_id,
+            pb.nombre_bloque,
+            pe.id AS ejercicio_id,
+            pe.nombre_ejercicio,
+            pe.series,
+            pe.reps,
+            pe.rpe,
+            pe.pausa,
+            pe.modalidad,
+            pe.link_yt,
+            pe.anotaciones,
+            pe.orden AS orden_ejercicio
+        FROM planes p
+        JOIN plan_semanas ps ON p.id = ps.id_plan
+        JOIN plan_dias pd ON ps.id = pd.id_semana
+        JOIN plan_bloques pb ON pd.id = pb.id_dia
+        JOIN plan_ejercicios pe ON pb.id = pe.id_bloque
+        ORDER BY pd.numero_dia, pb.orden, pe.orden
+        """
+        
+        cursor.execute(sql)
+        resultados = cursor.fetchall()
+        
+        cursor.close()
+        conexion.close()
+
+        # Si no hay datos, devolvemos la estructura vacía para que Flutter no falle
+        if not resultados:
+            return {"info_rutina": {}, "dias": []}
+
+        # 1. Armamos la cabecera (Microciclo y Semana)
+        info_rutina = {
+            "microciclo": resultados[0]['nombre_plan'],
+            "semanas_transcurridas": resultados[0]['numero_semana']
+        }
+
+        # 2. Agrupamos los datos usando diccionarios de Python
+        dias_dict = {}
+        for fila in resultados:
+            dia_id = fila['numero_dia']
+            
+            # Creamos el Día si todavía no existe en nuestro diccionario
+            if dia_id not in dias_dict:
+                dias_dict[dia_id] = {
+                    "numero_dia": dia_id,
+                    "duracion_minutos": 60, 
+                    "notas_atleta": "Calentamiento general: 10 min movilidad articular.", 
+                    "bloques": {}
+                }
+
+            bloque_id = fila['bloque_id']
+            
+            # Creamos el Bloque dentro del Día si todavía no existe
+            if bloque_id not in dias_dict[dia_id]['bloques']:
+                dias_dict[dia_id]['bloques'][bloque_id] = {
+                    "nombre_bloque": fila['nombre_bloque'],
+                    "ejercicios": []
+                }
+
+            # Evaluamos si es un WOD/CrossFit según la modalidad
+            es_wod = fila['modalidad'].upper() in ['AMRAP', 'EMOM', 'FOR TIME']
+
+            # Empaquetamos el Ejercicio
+            ejercicio = {
+                "id_ejercicio": fila['ejercicio_id'],
+                "nombre_ejercicio": fila['nombre_ejercicio'],
+                "series": fila['series'],
+                "reps": fila['reps'],
+                "rpe_objetivo": str(fila['rpe']),
+                "pausa": fila['pausa'],
+                "modalidad": fila['modalidad'],
+                "anotaciones": fila['anotaciones'],
+                "link_yt": fila['link_yt'] if fila['link_yt'] else "",
+                "es_wod": es_wod
             }
-        ]
-    }
+            
+            # Lo metemos en su bloque correspondiente
+            dias_dict[dia_id]['bloques'][bloque_id]['ejercicios'].append(ejercicio)
+
+        # 3. Convertimos los diccionarios internos a listas para enviarlo como JSON limpio
+        dias_list = []
+        for d in dias_dict.values():
+            d['bloques'] = list(d['bloques'].values())
+            dias_list.append(d)
+
+        return {
+            "info_rutina": info_rutina,
+            "dias": dias_list
+        }
+
+    except Exception as e:
+        print(f"❌ Error al armar la rutina: {e}")
+        return {"info_rutina": {}, "dias": []}
