@@ -14,17 +14,6 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
-@app.post("/login")
-def login(request: LoginRequest):
-    print(f"Intento de login recibido de: {request.email}")
-    return {
-        "success": True, 
-        "mensaje": "Login exitoso", 
-        "usuario": {
-            "nombre": "Carla", 
-            "rol": "Admin"
-        }
-    }
     
 class RMRequest(BaseModel):
     usuario: str
