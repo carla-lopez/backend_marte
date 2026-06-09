@@ -601,22 +601,38 @@ class EditarAlumnoRequest(BaseModel):
 
 @app.put("/profesor/editar_alumno/{alumno_id}")
 def editar_alumno(alumno_id: int, request: EditarAlumnoRequest):
+    print(f"💾 Actualizando ficha del alumno ID {alumno_id}...")
     try:
         conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "No se pudo conectar a la base de datos"}
+            
         cursor = conexion.cursor()
         
+        # 💡 CORRECCIÓN: Cambiamos 'status_usuario = %s' por 'status = %s' 
+        # para que coincida exactamente con tu columna de MySQL
         sql = """
         UPDATE usuarios 
-        SET nombre = %s, email = %s, status_usuario = %s, categoria = %s, semana_actual = %s 
+        SET nombre = %s, email = %s, status = %s, categoria = %s, semana_actual = %s 
         WHERE id = %s
         """
-        cursor.execute(sql, (request.nombre, request.email, request.status, request.categoria, request.semana_actual, alumno_id))
+        cursor.execute(sql, (
+            request.nombre, 
+            request.email, 
+            request.status, 
+            request.categoria, 
+            request.semana_actual, 
+            alumno_id
+        ))
         conexion.commit()
         
         cursor.close()
         conexion.close()
+        print("✅ Ficha actualizada con éxito en la base de datos.")
         return {"success": True, "mensaje": "Ficha deportiva actualizada correctamente"}
+        
     except Exception as e:
+        print(f"❌ Error real en MySQL al editar alumno: {e}")
         return {"success": False, "mensaje": str(e)}
     
 # --- RUTA PARA OBTENER EL CATÁLOGO DE EJERCICIOS (AUTOCOMPLETADO EN FLUTTER) ---
