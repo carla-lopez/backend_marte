@@ -109,6 +109,52 @@ def obtener_historial(usuario: str = "Carla"):
             "success": False, 
             "mensaje": f"No se pudo obtener el historial: {e}"
         }
+        
+# --- NUEVO MODELO PARA RECIBIR LOS PESOS ---
+class PesosSesionRequest(BaseModel):
+    alumno_id: int
+    nombre_ejercicio: str
+    pesos: list[float]  # Recibe una lista de números, ej: [50.0, 55.0, 60.0]
+
+# --- NUEVA RUTA PARA GUARDAR LOS PESOS DEL DÍA ---
+@app.post("/guardar_pesos_sesion")
+def guardar_pesos_sesion(request: PesosSesionRequest):
+    print(f"🏋️ Guardando pesos de {request.nombre_ejercicio}: {request.pesos}")
+    
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de base de datos"}
+            
+        cursor = conexion.cursor()
+        
+        # 1. Creamos una tabla rápida para el historial diario si no existe
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS historial_diario (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            id_usuario INT NOT NULL,
+            nombre_ejercicio VARCHAR(100) NOT NULL,
+            pesos_levantados VARCHAR(255) NOT NULL,
+            fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        
+        # 2. Convertimos la lista de Python [50, 55] a un texto "50.0, 55.0" para MySQL
+        pesos_texto = ", ".join(map(str, request.pesos))
+        
+        # 3. Insertamos el registro
+        sql = "INSERT INTO historial_diario (id_usuario, nombre_ejercicio, pesos_levantados) VALUES (%s, %s, %s)"
+        cursor.execute(sql, (request.alumno_id, request.nombre_ejercicio, pesos_texto))
+        
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        
+        return {"success": True, "mensaje": "¡Pesos guardados correctamente!"}
+        
+    except Exception as e:
+        print(f"❌ Error al guardar pesos: {e}")
+        return {"success": False, "mensaje": str(e)}
 
 # RUTA PARA OBTENER LA PLANIFICACIÓN (DATOS SIMULADOS ESTILO EXCEL)
 @app.get("/rutina/{alumno_id}")
