@@ -776,3 +776,54 @@ def asignar_plan(request: AsignarPlanRequest):
         return {"success": True, "mensaje": "Plan asignado y ciclo reseteado a Semana 1"}
     except Exception as e:
         return {"success": False, "mensaje": str(e)}
+    
+class PlanPersonalizadoRequest(BaseModel):
+    alumno_id: int
+    categoria: str
+
+@app.post("/profesor/crear_plan_personalizado")
+def crear_plan_personalizado(request: PlanPersonalizadoRequest):
+    print(f"🛠️ Creando rutina a mano para el alumno ID: {request.alumno_id} ({request.categoria})")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión a la base de datos"}
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # 1. Buscamos el nombre del alumno para bautizar su plan personalizado
+        cursor.execute("SELECT nombre FROM usuarios WHERE id = %s", (request.alumno_id,))
+        alumno = cursor.fetchone()
+        if not alumno:
+            return {"success": False, "mensaje": "Alumno no encontrado"}
+            
+        nombre_plan_personalizado = f"Rutina - {alumno['nombre']}"
+        
+        # 2. Insertamos el nuevo esqueleto de plan en la tabla 'planes'
+        sql_plan = "INSERT INTO planes (nombre, categoria) VALUES (%s, %s)"
+        cursor.execute(sql_plan, (nombre_plan_personalizado, request.categoria))
+        nuevo_plan_id = cursor.lastrowid
+        
+        # 3. Se lo enlazamos al alumno inmediatamente y reseteamos su ciclo a Semana 1
+        sql_usuario = """
+        UPDATE usuarios 
+        SET id_plan = %s, categoria = %s, semana_actual = 1 
+        WHERE id = %s
+        """
+        cursor.execute(sql_usuario, (nuevo_plan_id, request.categoria, request.alumno_id))
+        
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        
+        # Devolvemos los datos clave para que Flutter pueda abrir la pantalla del editor
+        return {
+            "success": True,
+            "plan_id": nuevo_plan_id,
+            "plan_nombre": nombre_plan_personalizado,
+            "mensaje": "Esqueleto personalizado creado con éxito"
+        }
+        
+    except Exception as e:
+        print(f"❌ Error al crear plan personalizado: {e}")
+        return {"success": False, "mensaje": str(e)}
