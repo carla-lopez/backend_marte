@@ -554,3 +554,29 @@ def login_usuarios(request: LoginRequest):
     except Exception as e:
         print(f"❌ Error en login: {e}")
         return {"success": False, "mensaje": "Error interno del servidor."}
+    
+from datetime import date
+
+# --- RUTA PARA RENOVAR EL ABONO DE UN ALUMNO ---
+@app.put("/profesor/renovar_abono/{alumno_id}")
+def renovar_abono(alumno_id: int):
+    print(f"💰 Registrando nuevo pago para el alumno ID: {alumno_id}")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de BD"}
+            
+        cursor = conexion.cursor()
+        hoy = date.today()
+        
+        # Actualizamos la fecha de pago al día de hoy
+        cursor.execute("UPDATE usuarios SET fecha_pago = %s WHERE id = %s", (hoy, alumno_id))
+        conexion.commit()
+        
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "¡Abono renovado exitosamente!"}
+        
+    except Exception as e:
+        print(f"❌ Error al renovar abono: {e}")
+        return {"success": False, "mensaje": "Error interno al renovar."}
