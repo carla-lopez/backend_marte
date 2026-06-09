@@ -32,7 +32,8 @@ def inicializar_base_de_datos():
         email VARCHAR(100) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         rol VARCHAR(20) DEFAULT 'Alumno',
-        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) DEFAULT 'Activo'
     );
     """
 
@@ -121,6 +122,17 @@ def inicializar_base_de_datos():
         FOREIGN KEY (id_bloque) REFERENCES plan_bloques(id) ON DELETE CASCADE
     );
     """
+    
+    # 9. Recursos del Menú (Nuevo Requerimiento del Profe)
+    tabla_recursos_menu = """
+    CREATE TABLE IF NOT EXISTS recursos_menu (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        titulo VARCHAR(100) NOT NULL,
+        url_destino VARCHAR(255) NOT NULL,
+        icono_name VARCHAR(50) DEFAULT 'link',
+        orden INT NOT NULL
+    );
+    """ # 💡 CORRECCIÓN 1: Comillas triples cerradas correctamente
 
     # Usuario semilla base
     usuario_defecto = """
@@ -138,10 +150,11 @@ def inicializar_base_de_datos():
         cursor.execute(tabla_dias)
         cursor.execute(tabla_bloques)
         cursor.execute(tabla_ejercicios)
+        cursor.execute(tabla_recursos_menu) # 💡 CORRECCIÓN 2: Agregamos la orden de ejecución para crear la tabla
         cursor.execute(usuario_defecto)
         conexion.commit()
 
-        # 🛠️ --- BLOQUE DE MIGRACIÓN DE ALUMNOS (REQUERIMIENTO NUEVO DEL PROFE) ---
+        # 🛠️ --- BLOQUE DE MIGRACIÓN DE ALUMNOS ---
         print("MIGRACIÓN: Verificando nuevas columnas de membresía en la tabla usuarios...")
         
         # Intentamos agregar la fecha del último abono (si no existe)
@@ -161,8 +174,7 @@ def inicializar_base_de_datos():
         except Error:
             pass
 
-        # Creamos un alumno de prueba (ID 2) con una fecha de pago fija para probar los vencimientos
-        # Le ponemos fecha de pago: 2026-06-01 (¡Para simular que pagó hace unos días!)
+        # Creamos un alumno de prueba (ID 2)
         alumno_prueba = """
         INSERT IGNORE INTO usuarios (id, nombre, email, password, rol, fecha_pago, id_plan) 
         VALUES (2, 'Juan Perez', 'juan@marte.com', '1234', 'Alumno', '2026-06-01', 1);
