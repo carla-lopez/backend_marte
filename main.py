@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import database
-from datetime import date
+from datetime import date, timedelta
 
 app = FastAPI(title="API de Marte Training")
 
@@ -353,61 +353,68 @@ def obtener_rutina(alumno_id: int):
         return {"membresia": {"status": "Error"}, "info_rutina": {}, "dias": []}
     
 # --- NUEVA RUTA PARA EL PANEL DEL PROFESOR: LISTAR ALUMNOS ---
-@app.get("/profesor/alumnos")
-def obtener_alumnos_profesor():
-    """
-    Devuelve la lista de todos los alumnos registrados, calculando los días
-    restantes de su abono y clasificándolos por su estado de pago.
-    """
+# --- NUEVA RUTA PARA EL PANEL DEL PROFESOR: LISTAR ALUMNOS ---
+@app.get("/alumnos")
+def obtener_alumnos():
+    print("👥 Petición recibida: Listando todos los alumnos...")
     try:
         conexion = database.obtener_conexion()
         if not conexion:
-            return {"success": False, "alumnos": []}
+            return [] # Devolvemos lista vacía en vez de dict para no romper Flutter
             
         cursor = conexion.cursor(dictionary=True)
         
-        # Traemos solo a los usuarios que tengan el rol de 'Alumno'
-        sql = "SELECT id, nombre, email, fecha_pago, id_plan FROM usuarios WHERE rol = 'Alumno' ORDER BY nombre ASC"
-        cursor.execute(sql)
-        alumnos = cursor.fetchall()
+        # Traemos a todos los usuarios que sean Alumnos
+        cursor.execute("SELECT id, nombre, email, fecha_pago, status FROM usuarios WHERE rol = 'Alumno'")
+        lista_usuarios = cursor.fetchall()
         
         cursor.close()
         conexion.close()
         
         hoy = date.today()
-        lista_procesada = []
+        alumnos_procesados = []
         
-        for al in alumnos:
-            fecha_pago = al['fecha_pago']
-            estado = "Sin Registrar"
-            dias_restantes = 0
+        for u in lista_usuarios:
+            fecha_pago = u["fecha_pago"]
             
-            if fecha_pago:
-                # Calculamos cuántos días pasaron desde el último abono
-                dias_pasados = (hoy - fecha_pago).days
-                dias_restantes = 30 - dias_pasados
+            # Si nunca pagó o la fecha está vacía, evitamos que Python crashee
+            if fecha_pago is None:
+                estado = "Sin Registrar"
+                dias_restantes = 0
+            else:
+                # Si la fecha es un string, la convertimos a objeto date
+                if isinstance(fecha_pago, str):
+                    from datetime import datetime
+                    fecha_pago = datetime.strptime(fecha_pago, "%Y-%m-%d").date()
                 
-                if dias_restantes < 0:
+                # Calculamos el vencimiento (30 días después del pago)
+                fecha_vencimiento = fecha_pago + timedelta(days=30)
+                dias_restantes = (fecha_vencimiento - hoy).days
+                
+                # Determinamos el color del semáforo
+                if dias_restantes <= 0:
                     estado = "Vencido"
-                elif dias_restantes <= 3:
+                elif dias_restantes <= 5:
                     estado = "Por Vencer"
                 else:
                     estado = "Al Día"
             
-            lista_procesada.append({
-                "id": al['id'],
-                "nombre": al['nombre'],
-                "email": al['email'],
-                "fecha_pago": str(fecha_pago) if fecha_pago else "Nunca",
-                "dias_restantes": dias_restantes,
-                "estado": estado
+            # Guardamos el alumno con su estado calculado
+            alumnos_procesados.append({
+                "id": u["id"],
+                "nombre": u["nombre"],
+                "email": u["email"],
+                "estado": estado,
+                "dias_restantes": max(0, dias_restantes),
+                "status_usuario": u["status"]
             })
             
-        return {"success": True, "alumnos": lista_procesada}
+        # IMPORTANTE: Devolvemos una lista plana directamente
+        return alumnos_procesados
         
     except Exception as e:
-        print(f"❌ Error al obtener lista de alumnos: {e}")
-        return {"success": False, "alumnos": []}
+        print(f"❌ ERROR CRÍTICO EN /ALUMNOS: {e}")
+        return []
     
 # --- MODELO PARA RECIBIR EL ALTA DE ALUMNO ---
 class AltaAlumnoRequest(BaseModel):
