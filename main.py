@@ -356,7 +356,7 @@ def obtener_rutina(alumno_id: int):
 # --- NUEVA RUTA PARA EL PANEL DEL PROFESOR: LISTAR ALUMNOS ---
 @app.get("/alumnos")
 def obtener_alumnos():
-    print("👥 Petición recibida: Listando todos los alumnos...")
+    print("👥 Petición recibida: Listando todos los alumnos con su ficha deportiva...")
     try:
         conexion = database.obtener_conexion()
         if not conexion:
@@ -364,8 +364,8 @@ def obtener_alumnos():
             
         cursor = conexion.cursor(dictionary=True)
         
-        # Traemos a todos los usuarios que sean Alumnos
-        cursor.execute("SELECT id, nombre, email, fecha_pago, status FROM usuarios WHERE rol = 'Alumno'")
+        # 💡 MODIFICACIÓN 1: Agregamos 'categoria' y 'semana_actual' a la consulta SQL
+        cursor.execute("SELECT id, nombre, email, fecha_pago, status, categoria, semana_actual FROM usuarios WHERE rol = 'Alumno'")
         lista_usuarios = cursor.fetchall()
         
         cursor.close()
@@ -399,14 +399,16 @@ def obtener_alumnos():
                 else:
                     estado = "Al Día"
             
-            # Guardamos el alumno con su estado calculado
+            # 💡 MODIFICACIÓN 2: Agregamos las nuevas propiedades al diccionario que se envía a Flutter
             alumnos_procesados.append({
                 "id": u["id"],
                 "nombre": u["nombre"],
                 "email": u["email"],
                 "estado": estado,
                 "dias_restantes": max(0, dias_restantes),
-                "status_usuario": u["status"]
+                "status_usuario": u["status"],
+                "categoria": u["categoria"] if u["categoria"] else "Fuerza",
+                "semana_actual": u["semana_actual"] if u["semana_actual"] is not None else 1
             })
             
         # IMPORTANTE: Devolvemos una lista plana directamente
@@ -514,6 +516,7 @@ def agregar_ejercicio_plan(request: AgregarEjercicioRequest):
         cursor.close()
         conexion.close()
         return {"success": True, "mensaje": "¡Ejercicio acoplado al plan con éxito!"}
+    
         
     except Exception as e:
         print(f"❌ Error al planificar: {e}")
@@ -592,31 +595,29 @@ def renovar_abono(alumno_id: int):
 class EditarAlumnoRequest(BaseModel):
     nombre: str
     email: str
-    status: str # Recibe 'Activo' o 'Inactivo'
+    status: str
+    categoria: str = "Fuerza"
+    semana_actual: int = 1
 
-# --- RUTA PARA EDITAR ALUMNO ---
 @app.put("/profesor/editar_alumno/{alumno_id}")
 def editar_alumno(alumno_id: int, request: EditarAlumnoRequest):
-    print(f"✏️ Editando alumno ID {alumno_id}: {request.nombre} - Estado: {request.status}")
     try:
         conexion = database.obtener_conexion()
-        if not conexion:
-            return {"success": False, "mensaje": "Error de BD"}
-            
         cursor = conexion.cursor()
         
-        # Actualizamos los datos principales y el status (Activo/Inactivo)
-        sql = "UPDATE usuarios SET nombre = %s, email = %s, status = %s WHERE id = %s"
-        cursor.execute(sql, (request.nombre, request.email, request.status, alumno_id))
+        sql = """
+        UPDATE usuarios 
+        SET nombre = %s, email = %s, status_usuario = %s, categoria = %s, semana_actual = %s 
+        WHERE id = %s
+        """
+        cursor.execute(sql, (request.nombre, request.email, request.status, request.categoria, request.semana_actual, alumno_id))
         conexion.commit()
         
         cursor.close()
         conexion.close()
-        return {"success": True, "mensaje": "¡Alumno actualizado exitosamente!"}
-        
+        return {"success": True, "mensaje": "Ficha deportiva actualizada correctamente"}
     except Exception as e:
-        print(f"❌ Error al editar alumno: {e}")
-        return {"success": False, "mensaje": "Error interno al editar."}
+        return {"success": False, "mensaje": str(e)}
     
 # --- RUTA PARA OBTENER EL CATÁLOGO DE EJERCICIOS (AUTOCOMPLETADO EN FLUTTER) ---
 @app.get("/catalogo_ejercicios")
@@ -733,3 +734,29 @@ def obtener_ejercicios_plan(plan_id: int):
     except Exception as e:
         print(f"❌ Error al cargar ejercicios del plan {plan_id}: {e}")
         return []
+    
+class AsignarPlanRequest(BaseModel):
+    alumno_id: int
+    plan_id: int
+    categoria: str
+
+@app.put("/profesor/asignar_plan")
+def asignar_plan(request: AsignarPlanRequest):
+    try:
+        conexion = database.obtener_conexion()
+        cursor = conexion.cursor()
+        
+        # Actualizamos plan, categoría y reseteamos semana a 1
+        sql = """
+        UPDATE usuarios 
+        SET id_plan = %s, categoria = %s, semana_actual = 1 
+        WHERE id = %s
+        """
+        cursor.execute(sql, (request.plan_id, request.categoria, request.alumno_id))
+        conexion.commit()
+        
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "Plan asignado y ciclo reseteado a Semana 1"}
+    except Exception as e:
+        return {"success": False, "mensaje": str(e)}

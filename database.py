@@ -219,6 +219,15 @@ def inicializar_base_de_datos():
         except Error:
             pass  # Si ya existe, pasa de largo sin chistar
         
+        # 5. Agregar campos de seguimiento al alumno
+        try:
+            cursor.execute("ALTER TABLE usuarios ADD COLUMN categoria VARCHAR(50) DEFAULT 'Fuerza';")
+            cursor.execute("ALTER TABLE usuarios ADD COLUMN semana_actual INT DEFAULT 1;")
+            conexion.commit()
+            print("  ✅ Columnas 'categoria' y 'semana_actual' añadidas.")
+        except Error:
+            pass  # Si ya existen, pasa de largo sin chistar
+        
         # Creamos un alumno de prueba (ID 2)
         alumno_prueba = """
         INSERT IGNORE INTO usuarios (id, nombre, email, password, rol, fecha_pago, id_plan) 
