@@ -524,13 +524,14 @@ def agregar_ejercicio_plan(request: AgregarEjercicioRequest):
         return {"success": False, "mensaje": str(e)}
 
 # --- MODELO PARA RECIBIR LAS CREDENCIALES ---
+# --- MODELO PARA RECIBIR LAS CREDENCIALES ---
 class LoginRequest(BaseModel):
     email: str
     password: str
 
 @app.post("/login")
 def login_usuarios(request: LoginRequest):
-    print(f"🔐 Intento de login para: {request.email}")
+    print(f"🔐 Intento de login REAL para: {request.email}")
     try:
         conexion = database.obtener_conexion()
         if not conexion:
@@ -538,7 +539,7 @@ def login_usuarios(request: LoginRequest):
             
         cursor = conexion.cursor(dictionary=True)
         
-        # Buscamos al usuario por mail y contraseña
+        # 🕵️‍♂️ Acá está la magia: Buscamos coincidencia EXACTA de mail y contraseña
         sql = "SELECT id, nombre, email, rol FROM usuarios WHERE email = %s AND password = %s"
         cursor.execute(sql, (request.email.strip(), request.password.strip()))
         usuario = cursor.fetchone()
@@ -547,14 +548,20 @@ def login_usuarios(request: LoginRequest):
         conexion.close()
         
         if usuario:
+            # Si encontró al usuario en MySQL, lo deja pasar y manda sus datos (INCLUYENDO EL ID)
             return {
                 "success": True, 
-                "mensaje": "¡Login correcto!", 
-                "usuario": usuario # Devuelve ID, Nombre y Rol (Admin o Alumno)
+                "mensaje": "Login exitoso", 
+                "usuario": {
+                    "id": usuario["id"],
+                    "nombre": usuario["nombre"],
+                    "rol": usuario["rol"]
+                }
             }
         else:
+            # Si no lo encontró, lo rebota sin piedad
             return {"success": False, "mensaje": "Correo o contraseña incorrectos."}
             
     except Exception as e:
         print(f"❌ Error en login: {e}")
-        return {"success": False, "mensaje": str(e)}
+        return {"success": False, "mensaje": "Error interno del servidor."}
