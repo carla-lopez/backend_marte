@@ -522,3 +522,39 @@ def agregar_ejercicio_plan(request: AgregarEjercicioRequest):
     except Exception as e:
         print(f"❌ Error al planificar: {e}")
         return {"success": False, "mensaje": str(e)}
+
+# --- MODELO PARA RECIBIR LAS CREDENCIALES ---
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/login")
+def login_usuarios(request: LoginRequest):
+    print(f"🔐 Intento de login para: {request.email}")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión con la base de datos"}
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Buscamos al usuario por mail y contraseña
+        sql = "SELECT id, nombre, email, rol FROM usuarios WHERE email = %s AND password = %s"
+        cursor.execute(sql, (request.email.strip(), request.password.strip()))
+        usuario = cursor.fetchone()
+        
+        cursor.close()
+        conexion.close()
+        
+        if usuario:
+            return {
+                "success": True, 
+                "mensaje": "¡Login correcto!", 
+                "usuario": usuario # Devuelve ID, Nombre y Rol (Admin o Alumno)
+            }
+        else:
+            return {"success": False, "mensaje": "Correo o contraseña incorrectos."}
+            
+    except Exception as e:
+        print(f"❌ Error en login: {e}")
+        return {"success": False, "mensaje": str(e)}
