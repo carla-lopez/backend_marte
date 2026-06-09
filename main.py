@@ -670,3 +670,31 @@ def obtener_planes_maestros():
     except Exception as e:
         print(f"❌ Error al obtener planes maestros: {e}")
         return []
+    
+# --- MODELO PARA CREAR UN PLAN NUEVO ---
+class CrearPlanRequest(BaseModel):
+    nombre: str
+    descripcion: str
+    categoria: str # 'Fuerza' o 'CrossFit'
+
+@app.post("/profesor/crear_plan")
+def crear_plan(request: CrearPlanRequest):
+    print(f"📝 Creando nueva plantilla: {request.nombre} ({request.categoria})")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión"}
+            
+        cursor = conexion.cursor()
+        
+        sql = "INSERT INTO planes (nombre, descripcion, categoria) VALUES (%s, %s, %s)"
+        cursor.execute(sql, (request.nombre, request.descripcion, request.categoria))
+        conexion.commit()
+        
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "¡Plan creado exitosamente!"}
+        
+    except Exception as e:
+        print(f"❌ Error al crear plan: {e}")
+        return {"success": False, "mensaje": str(e)}
