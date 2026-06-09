@@ -827,3 +827,21 @@ def crear_plan_personalizado(request: PlanPersonalizadoRequest):
     except Exception as e:
         print(f"❌ Error al crear plan personalizado: {e}")
         return {"success": False, "mensaje": str(e)}
+    
+@app.delete("/profesor/eliminar_ejercicio/{ejercicio_id}")
+def eliminar_ejercicio(ejercicio_id: int):
+    print(f"🗑️ Eliminando ejercicio ID: {ejercicio_id}")
+    try:
+        conexion = database.obtener_conexion()
+        cursor = conexion.cursor()
+        
+        # Eliminamos el ejercicio directamente de la tabla plan_ejercicios
+        cursor.execute("DELETE FROM plan_ejercicios WHERE id = %s", (ejercicio_id,))
+        conexion.commit()
+        
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "Ejercicio removido con éxito"}
+    except Exception as e:
+        print(f"❌ Error al eliminar ejercicio: {e}")
+        return {"success": False, "mensaje": str(e)}
