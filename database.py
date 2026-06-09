@@ -157,7 +157,7 @@ def inicializar_base_de_datos():
         # 🛠️ --- BLOQUE DE MIGRACIÓN DE ALUMNOS ---
         print("MIGRACIÓN: Verificando nuevas columnas de membresía en la tabla usuarios...")
         
-        # Intentamos agregar la fecha del último abono (si no existe)
+        # 1. Intentamos agregar la fecha del último abono
         try:
             cursor.execute("ALTER TABLE usuarios ADD COLUMN fecha_pago DATE NULL;")
             conexion.commit()
@@ -165,7 +165,7 @@ def inicializar_base_de_datos():
         except Error:
             pass  # Si tira error es porque la columna ya existía, pasamos de largo.
 
-        # Intentamos agregar el ID del plan asignado para vincular al alumno con su rutina
+        # 2. Intentamos agregar el ID del plan asignado
         try:
             cursor.execute("ALTER TABLE usuarios ADD COLUMN id_plan INT NULL;")
             cursor.execute("ALTER TABLE usuarios ADD CONSTRAINT fk_usuarios_planes FOREIGN KEY (id_plan) REFERENCES planes(id) ON DELETE SET NULL;")
@@ -173,7 +173,15 @@ def inicializar_base_de_datos():
             print("  ✅ Columna 'id_plan' y su Clave Foránea añadidas con éxito.")
         except Error:
             pass
-
+        
+        # 3. Intentamos agregar la columna status (Activo/Inactivo)
+        try:
+            cursor.execute("ALTER TABLE usuarios ADD COLUMN status VARCHAR(20) DEFAULT 'Activo';")
+            conexion.commit()
+            print("  ✅ Columna 'status' añadida con éxito.")
+        except Error:
+            pass  # Si ya existe, pasa de largo sin chistar
+        
         # Creamos un alumno de prueba (ID 2)
         alumno_prueba = """
         INSERT IGNORE INTO usuarios (id, nombre, email, password, rol, fecha_pago, id_plan) 
