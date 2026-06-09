@@ -587,3 +587,33 @@ def renovar_abono(alumno_id: int):
     except Exception as e:
         print(f"❌ Error al renovar abono: {e}")
         return {"success": False, "mensaje": "Error interno al renovar."}
+    
+# --- MODELO PARA EDITAR UN ALUMNO ---
+class EditarAlumnoRequest(BaseModel):
+    nombre: str
+    email: str
+    status: str # Recibe 'Activo' o 'Inactivo'
+
+# --- RUTA PARA EDITAR ALUMNO ---
+@app.put("/profesor/editar_alumno/{alumno_id}")
+def editar_alumno(alumno_id: int, request: EditarAlumnoRequest):
+    print(f"✏️ Editando alumno ID {alumno_id}: {request.nombre} - Estado: {request.status}")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de BD"}
+            
+        cursor = conexion.cursor()
+        
+        # Actualizamos los datos principales y el status (Activo/Inactivo)
+        sql = "UPDATE usuarios SET nombre = %s, email = %s, status = %s WHERE id = %s"
+        cursor.execute(sql, (request.nombre, request.email, request.status, alumno_id))
+        conexion.commit()
+        
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "¡Alumno actualizado exitosamente!"}
+        
+    except Exception as e:
+        print(f"❌ Error al editar alumno: {e}")
+        return {"success": False, "mensaje": "Error interno al editar."}
