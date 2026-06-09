@@ -156,6 +156,40 @@ def guardar_pesos_sesion(request: PesosSesionRequest):
         print(f"❌ Error al guardar pesos: {e}")
         return {"success": False, "mensaje": str(e)}
 
+# --- NUEVA RUTA PARA LEER LOS PESOS DEL DÍA ---
+@app.get("/obtener_pesos_sesion")
+def obtener_pesos_sesion(alumno_id: int, nombre_ejercicio: str):
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "pesos": []}
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Buscamos el último registro de pesos para ese alumno y ese ejercicio
+        sql = """
+        SELECT pesos_levantados 
+        FROM historial_diario 
+        WHERE id_usuario = %s AND nombre_ejercicio = %s 
+        ORDER BY fecha DESC LIMIT 1
+        """
+        cursor.execute(sql, (alumno_id, nombre_ejercicio))
+        resultado = cursor.fetchone()
+        
+        cursor.close()
+        conexion.close()
+        
+        # Si encontró algo (ej: "50.0, 60.5"), lo separamos y lo mandamos como lista
+        if resultado and resultado["pesos_levantados"]:
+            lista_pesos = [p.strip() for p in resultado["pesos_levantados"].split(",")]
+            return {"success": True, "pesos": lista_pesos}
+            
+        return {"success": True, "pesos": []}
+        
+    except Exception as e:
+        print(f"❌ Error al obtener pesos: {e}")
+        return {"success": False, "pesos": []}
+
 # RUTA PARA OBTENER LA PLANIFICACIÓN (DATOS SIMULADOS ESTILO EXCEL)
 @app.get("/rutina/{alumno_id}")
 def obtener_rutina(alumno_id: int):
