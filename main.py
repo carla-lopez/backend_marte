@@ -617,3 +617,56 @@ def editar_alumno(alumno_id: int, request: EditarAlumnoRequest):
     except Exception as e:
         print(f"❌ Error al editar alumno: {e}")
         return {"success": False, "mensaje": "Error interno al editar."}
+    
+# --- RUTA PARA OBTENER EL CATÁLOGO DE EJERCICIOS (AUTOCOMPLETADO EN FLUTTER) ---
+@app.get("/catalogo_ejercicios")
+def obtener_catalogo():
+    print("📚 Petición recibida: Enviando catálogo maestro para autocompletado...")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return []
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Seleccionamos los campos necesarios ordenados alfabéticamente
+        cursor.execute("SELECT nombre, grupo_muscular, link_yt FROM catalogo_ejercicios ORDER BY nombre ASC")
+        catalogo = cursor.fetchall()
+        
+        cursor.close()
+        conexion.close()
+        
+        return catalogo  # Devolvemos la lista plana directamente, igual que hicimos con /alumnos
+        
+    except Exception as e:
+        print(f"❌ Error al obtener el catálogo de ejercicios: {e}")
+        return []
+
+# --- RUTA PARA LISTAR LOS PLANES MAESTROS DE LA LIBRERÍA ---
+@app.get("/profesor/planes")
+def obtener_planes_maestros():
+    print("📋 Petición recibida: Listando plantillas de planes maestros...")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return []
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Traemos las plantillas de planes globales creadas por el profesor
+        cursor.execute("SELECT id, nombre, descripcion, fecha_creacion FROM planes ORDER BY id DESC")
+        planes = cursor.fetchall()
+        
+        cursor.close()
+        conexion.close()
+        
+        # Convertimos la fecha a texto para evitar problemas de serialización JSON
+        for p in planes:
+            if p["fecha_creacion"]:
+                p["fecha_creacion"] = str(p["fecha_creacion"])
+                
+        return planes
+        
+    except Exception as e:
+        print(f"❌ Error al obtener planes maestros: {e}")
+        return []

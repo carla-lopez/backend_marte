@@ -133,6 +133,16 @@ def inicializar_base_de_datos():
         orden INT NOT NULL
     );
     """ # 💡 CORRECCIÓN 1: Comillas triples cerradas correctamente
+    
+    # 10. Catálogo Maestro de Ejercicios (Para autocompletado del Profe)
+    tabla_catalogo = """
+    CREATE TABLE IF NOT EXISTS catalogo_ejercicios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL UNIQUE,
+        grupo_muscular VARCHAR(50),
+        link_yt VARCHAR(255)
+    );
+    """
 
     # Usuario semilla base
     usuario_defecto = """
@@ -151,7 +161,26 @@ def inicializar_base_de_datos():
         cursor.execute(tabla_bloques)
         cursor.execute(tabla_ejercicios)
         cursor.execute(tabla_recursos_menu) # 💡 CORRECCIÓN 2: Agregamos la orden de ejecución para crear la tabla
+        cursor.execute(tabla_catalogo) # 💡 CORRECCIÓN 3: Agregamos la orden de ejecución para crear la tabla
         cursor.execute(usuario_defecto)
+        conexion.commit()
+        
+        # 🛠️ Inyectamos ejercicios base para el autocompletado
+        ejercicios_base = [
+            ("Sentadilla Tras Nuca", "Piernas", "https://youtube.com/shorts/sentadilla"),
+            ("Sentadilla Frontal", "Piernas", "https://youtube.com/shorts/frontal"),
+            ("Peso Muerto Convencional", "Espalda/Isquios", "https://youtube.com/shorts/pesomuerto"),
+            ("Banco Plano con Barra", "Pecho", "https://youtube.com/shorts/bancoplano"),
+            ("Dominadas Estrictas", "Espalda", "https://youtube.com/shorts/dominadas"),
+            ("Press Militar con Mancuernas", "Hombros", "https://youtube.com/shorts/militar"),
+            ("Burpees", "Cardio/Fullbody", "https://youtube.com/shorts/burpees")
+        ]
+        
+        cursor.executemany("""
+            INSERT IGNORE INTO catalogo_ejercicios (nombre, grupo_muscular, link_yt) 
+            VALUES (%s, %s, %s)
+        """, ejercicios_base)
+        
         conexion.commit()
 
         # 🛠️ --- BLOQUE DE MIGRACIÓN DE ALUMNOS ---
