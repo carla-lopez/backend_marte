@@ -978,3 +978,55 @@ def eliminar_rutina_historial(id_plan: int):
     except Exception as e:
         print(f"❌ Error al purgar rutina del historial: {e}")
         return {"success": False, "mensaje": str(e)}
+
+
+@app.put("/profesor/finalizar_plan/{plan_id}")
+def finalizar_plan(plan_id: int):
+    print(f"💾 Guardando y renombrando planificación ID: {plan_id}...")
+    try:
+        conexion = database.obtener_conexion()
+        cursor = conexion.cursor(dictionary=True)
+        
+        # 1. Buscamos si hay un alumno asignado a este plan para extraer su nombre
+        cursor.execute("SELECT nombre FROM usuarios WHERE id_plan = %s", (plan_id,))
+        usuario = cursor.fetchone()
+        
+        if usuario:
+            nombre_atleta = usuario['nombre']
+        else:
+            # Salvaguarda: si no está asignado todavía, usamos el nombre base del plan
+            cursor.execute("SELECT nombre FROM planes WHERE id = %s", (plan_id,))
+            plan_row = cursor.fetchone()
+            nombre_atleta = plan_row['nombre'] if plan_row else "Atleta"
+            
+        # Limpiamos prefijos redundantes para que no se dupliquen
+        nombre_atleta = nombre_atleta.replace("Rutina - ", "").replace("Rutina: ", "")
+        
+        # 2. Calcular los meses dinámicamente (Ej: JUN-JUL 2026)
+        hoy = datetime.datetime.now()
+        meses_abrev = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
+        
+        idx_mes_actual = hoy.month - 1
+        idx_mes_siguiente = hoy.month if hoy.month < 12 else 0 # Si es diciembre, pasa a enero
+        
+        abrev_actual = meses_abrev[idx_mes_actual]
+        abrev_siguiente = meses_abrev[idx_mes_siguiente]
+        anio = hoy.year
+        
+        # Estructuramos el formato exacto pedido
+        nuevo_titulo = f"Rutina {nombre_atleta} {abrev_actual}-{abrev_siguiente} {anio}"
+        
+        # 3. Impactamos el nuevo nombre en la tabla general de planes y en el historial
+        cursor.execute("UPDATE planes SET nombre = %s WHERE id = %s", (nuevo_titulo, plan_id))
+        cursor.execute("UPDATE historial_rutinas SET nombre_ciclo = %s WHERE id_plan = %s", (nuevo_titulo, plan_id))
+        
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        
+        print(f"✅ Planificación sellada con éxito: {nuevo_titulo}")
+        return {"success": True, "nuevo_titulo": nuevo_titulo}
+        
+    except Exception as e:
+        print(f"❌ Error al finalizar plan: {e}")
+        return {"success": False, "mensaje": str(e)}
