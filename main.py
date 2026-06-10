@@ -1049,3 +1049,76 @@ def finalizar_plan(plan_id: int):
     except Exception as e:
         print(f"❌ Error al finalizar plan: {e}")
         return {"success": False, "mensaje": str(e)}
+    
+class ClonarSemanaRequest(BaseModel):
+    plan_id: int
+    semana_origen: int
+    semana_destino: int
+
+@app.post("/profesor/clonar_semana")
+def clonar_semana(request: ClonarSemanaRequest):
+    print(f"🔄 Clonando Semana {request.semana_origen} hacia Semana {request.semana_destino} (Plan ID: {request.plan_id})")
+    try:
+        conexion = database.obtener_conexion()
+        cursor = conexion.cursor(dictionary=True)
+
+        # 1. Traer todos los ejercicios exactos de la semana origen
+        sql_origen = """
+        SELECT 
+            pd.numero_dia, pb.nombre_bloque,
+            pe.nombre_ejercicio, pe.series, pe.reps, pe.rpe, pe.pausa, pe.modalidad, pe.anotaciones
+        FROM plan_semanas ps
+        JOIN plan_dias pd ON ps.id = pd.id_semana
+        JOIN plan_bloques pb ON pd.id = pb.id_dia
+        JOIN plan_ejercicios pe ON pb.id = pe.id_bloque
+        WHERE ps.id_plan = %s AND ps.numero_semana = %s
+        """
+        cursor.execute(sql_origen, (request.plan_id, request.semana_origen))
+        ejercicios_a_copiar = cursor.fetchall()
+
+        if not ejercicios_a_copiar:
+            return {"success": False, "mensaje": "La semana anterior está vacía."}
+
+        # 2. Replicar la estructura (Semanas > Días > Bloques > Ejercicios) en el destino
+        for ej in ejercicios_a_copiar:
+            # Semana
+            cursor.execute("SELECT id FROM plan_semanas WHERE id_plan = %s AND numero_semana = %s", (request.plan_id, request.semana_destino))
+            semana_row = cursor.fetchone()
+            if not semana_row:
+                cursor.execute("INSERT INTO plan_semanas (id_plan, numero_semana) VALUES (%s, %s)", (request.plan_id, request.semana_destino))
+                id_semana_nueva = cursor.lastrowid
+            else:
+                id_semana_nueva = semana_row['id']
+                
+            # Día
+            cursor.execute("SELECT id FROM plan_dias WHERE id_semana = %s AND numero_dia = %s", (id_semana_nueva, ej['numero_dia']))
+            dia_row = cursor.fetchone()
+            if not dia_row:
+                cursor.execute("INSERT INTO plan_dias (id_semana, numero_dia) VALUES (%s, %s)", (id_semana_nueva, ej['numero_dia']))
+                id_dia_nuevo = cursor.lastrowid
+            else:
+                id_dia_nuevo = dia_row['id']
+                
+            # Bloque
+            cursor.execute("SELECT id FROM plan_bloques WHERE id_dia = %s AND nombre_bloque = %s", (id_dia_nuevo, ej['nombre_bloque']))
+            bloque_row = cursor.fetchone()
+            if not bloque_row:
+                cursor.execute("INSERT INTO plan_bloques (id_dia, nombre_bloque) VALUES (%s, %s)", (id_dia_nuevo, ej['nombre_bloque']))
+                id_bloque_nuevo = cursor.lastrowid
+            else:
+                id_bloque_nuevo = bloque_row['id']
+                
+            # Ejercicio
+            sql_ins_ej = """
+            INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, anotaciones)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql_ins_ej, (id_bloque_nuevo, ej['nombre_ejercicio'], ej['series'], ej['reps'], ej['rpe'], ej['pausa'], ej['modalidad'], ej['anotaciones']))
+
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "Estructura replicada con éxito"}
+    except Exception as e:
+        print(f"❌ Error al clonar semana: {e}")
+        return {"success": False, "mensaje": str(e)}
