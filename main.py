@@ -984,6 +984,9 @@ def eliminar_rutina_historial(id_plan: int):
 def finalizar_plan(plan_id: int):
     print(f"💾 Guardando y renombrando planificación ID: {plan_id}...")
     try:
+        # 💡 IMPORTACIÓN LOCAL SEGURA (Evita NameError y conflictos con lo que haya arriba del archivo)
+        from datetime import datetime
+        
         conexion = database.obtener_conexion()
         cursor = conexion.cursor(dictionary=True)
         
@@ -1002,8 +1005,8 @@ def finalizar_plan(plan_id: int):
         # Limpiamos prefijos redundantes para que no se dupliquen
         nombre_atleta = nombre_atleta.replace("Rutina - ", "").replace("Rutina: ", "")
         
-        # 2. Calcular los meses dinámicamente (Ej: JUN-JUL 2026)
-        hoy = datetime.datetime.now()
+        # 2. Calcular los meses dinámicamente usando la importación local
+        hoy = datetime.now()
         meses_abrev = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
         
         idx_mes_actual = hoy.month - 1
@@ -1013,7 +1016,7 @@ def finalizar_plan(plan_id: int):
         abrev_siguiente = meses_abrev[idx_mes_siguiente]
         anio = hoy.year
         
-        # Estructuramos el formato exacto pedido
+        # Estructuramos el formato bimensual
         nuevo_titulo = f"Rutina {nombre_atleta} {abrev_actual}-{abrev_siguiente} {anio}"
         
         # 3. Impactamos el nuevo nombre en la tabla general de planes y en el historial
