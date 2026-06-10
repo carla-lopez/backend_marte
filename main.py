@@ -984,50 +984,66 @@ def eliminar_rutina_historial(id_plan: int):
 def finalizar_plan(plan_id: int):
     print(f"💾 Guardando y renombrando planificación ID: {plan_id}...")
     try:
-        # 💡 IMPORTACIÓN LOCAL SEGURA (Evita NameError y conflictos con lo que haya arriba del archivo)
         from datetime import datetime
         
         conexion = database.obtener_conexion()
         cursor = conexion.cursor(dictionary=True)
         
-        # 1. Buscamos si hay un alumno asignado a este plan para extraer su nombre
-        cursor.execute("SELECT nombre FROM usuarios WHERE id_plan = %s", (plan_id,))
+        # 1. Buscamos el alumno asignado a este plan para extraer su ID y su Nombre
+        cursor.execute("SELECT id, nombre FROM usuarios WHERE id_plan = %s", (plan_id,))
         usuario = cursor.fetchone()
         
         if usuario:
             nombre_atleta = usuario['nombre']
+            alumno_id = usuario['id']
         else:
-            # Salvaguarda: si no está asignado todavía, usamos el nombre base del plan
+            # Salvaguarda: si no está asignado de forma activa, usamos el nombre base del plan
             cursor.execute("SELECT nombre FROM planes WHERE id = %s", (plan_id,))
             plan_row = cursor.fetchone()
             nombre_atleta = plan_row['nombre'] if plan_row else "Atleta"
+            alumno_id = None
             
-        # Limpiamos prefijos redundantes para que no se dupliquen
+        # Limpiamos prefijos redundantes
         nombre_atleta = nombre_atleta.replace("Rutina - ", "").replace("Rutina: ", "")
         
-        # 2. Calcular los meses dinámicamente usando la importación local
+        # 2. Calcular los meses dinámicamente (Ej: JUN-JUL 2026)
         hoy = datetime.now()
         meses_abrev = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
         
         idx_mes_actual = hoy.month - 1
-        idx_mes_siguiente = hoy.month if hoy.month < 12 else 0 # Si es diciembre, pasa a enero
+        idx_mes_siguiente = hoy.month if hoy.month < 12 else 0
         
         abrev_actual = meses_abrev[idx_mes_actual]
         abrev_siguiente = meses_abrev[idx_mes_siguiente]
         anio = hoy.year
         
-        # Estructuramos el formato bimensual
         nuevo_titulo = f"Rutina {nombre_atleta} {abrev_actual}-{abrev_siguiente} {anio}"
         
-        # 3. Impactamos el nuevo nombre en la tabla general de planes y en el historial
+        # 3. Actualizar el nombre definitivo en la tabla general de planes
         cursor.execute("UPDATE planes SET nombre = %s WHERE id = %s", (nuevo_titulo, plan_id))
-        cursor.execute("UPDATE historial_rutinas SET nombre_ciclo = %s WHERE id_plan = %s", (nuevo_titulo, plan_id))
+        
+        # 4. 💡 LA SOLUCIÓN: Verificar si ya tiene una entrada en el historial
+        if alumno_id:
+            cursor.execute("SELECT id FROM historial_rutinas WHERE id_plan = %s", (plan_id,))
+            historial_row = cursor.fetchone()
+            
+            if not historial_row:
+                # Si fue armada a mano, no existía en el historial. ¡La creamos ahora mismo!
+                cursor.execute(
+                    "INSERT INTO historial_rutinas (id_alumno, id_plan, nombre_ciclo) VALUES (%s, %s, %s)",
+                    (alumno_id, plan_id, nuevo_titulo)
+                )
+                print(f"✨ Fila inexistente detectada: Indexada rutina a mano en el historial del alumno {alumno_id}")
+            else:
+                # Si vino de una plantilla clonada, ya existía, así que solo actualizamos el nombre bimensual
+                cursor.execute("UPDATE historial_rutinas SET nombre_ciclo = %s WHERE id_plan = %s", (nuevo_titulo, plan_id))
+                print("📝 Registro existente actualizado con el formato de fecha bimensual")
         
         conexion.commit()
         cursor.close()
         conexion.close()
         
-        print(f"✅ Planificación sellada con éxito: {nuevo_titulo}")
+        print(f"✅ Planificación indexada y sellada con éxito: {nuevo_titulo}")
         return {"success": True, "nuevo_titulo": nuevo_titulo}
         
     except Exception as e:
