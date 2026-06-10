@@ -915,3 +915,66 @@ def eliminar_ejercicio(ejercicio_id: int):
     except Exception as e:
         print(f"❌ Error al eliminar ejercicio: {e}")
         return {"success": False, "mensaje": str(e)}
+    
+@app.get("/profesor/historial_alumno/{alumno_id}")
+def obtener_historial_alumno(alumno_id: int):
+    print(f"📋 Consultando historial de planificaciones para el atleta ID: {alumno_id}")
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return []
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Cruzamos la tabla de historial con la de planes para saber la categoría (Fuerza/CrossFit)
+        sql = """
+        SELECT h.id AS historial_id, h.id_plan, h.nombre_ciclo, h.fecha_asignacion, p.categoria
+        FROM historial_rutinas h
+        JOIN planes p ON h.id_plan = p.id
+        WHERE h.id_alumno = %s
+        ORDER BY h.fecha_asignacion DESC
+        """
+        cursor.execute(sql, (alumno_id,))
+        historial = cursor.fetchall()
+        
+        # Formateamos la fecha para mostrarla prolija en la app (Día/Mes/Año)
+        for h in historial:
+            if h['fecha_asignacion']:
+                h['fecha_asignacion'] = h['fecha_asignacion'].strftime("%d/%m/%Y")
+                
+        cursor.close()
+        conexion.close()
+        return historial
+    except Exception as e:
+        print(f"❌ Error al recuperar historial en MySQL: {e}")
+        return []
+
+@app.delete("/profesor/eliminar_rutina_historial/{id_plan}")
+def eliminar_rutina_historial(id_plan: int):
+    print(f"🗑️ Solicitud de purga total para la rutina histórica ID: {id_plan}")
+    try:
+        conexion = database.obtener_conexion()
+        cursor = conexion.cursor()
+        
+        # 1. Borramos la entrada del registro de historial
+        cursor.execute("DELETE FROM historial_rutinas WHERE id_plan = %s", (id_plan,))
+        
+        # 2. Borramos los ejercicios de forma limpia para no dejar registros huérfanos
+        cursor.execute("""
+            DELETE pe FROM plan_ejercicios pe
+            JOIN plan_bloques pb ON pe.id_bloque = pb.id
+            JOIN plan_dias pd ON pb.id_dia = pd.id
+            JOIN plan_semanas ps ON pd.id_semana = ps.id
+            WHERE ps.id_plan = %s
+        """, (id_plan,))
+        
+        # 3. Finalmente, borramos el contenedor del plan
+        cursor.execute("DELETE FROM planes WHERE id = %s", (id_plan,))
+        
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "Planificación eliminada del historial con éxito"}
+    except Exception as e:
+        print(f"❌ Error al purgar rutina del historial: {e}")
+        return {"success": False, "mensaje": str(e)}
