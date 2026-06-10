@@ -100,7 +100,7 @@ def inicializar_base_de_datos():
         id INT AUTO_INCREMENT PRIMARY KEY,
         id_dia INT NOT NULL,
         nombre_bloque VARCHAR(100) NOT NULL,
-        orden INT NOT NULL,
+        orden INT DEFAULT 0,
         FOREIGN KEY (id_dia) REFERENCES plan_dias(id) ON DELETE CASCADE
     );
     """

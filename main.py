@@ -1133,3 +1133,32 @@ def clonar_semana(request: ClonarSemanaRequest):
     except Exception as e:
         print(f"❌ Error al clonar semana: {e}")
         return {"success": False, "mensaje": str(e)}
+    
+class EditarEjercicioRequest(BaseModel):
+    series: str
+    reps: str
+    rpe: str
+    pausa: str
+    anotaciones: str
+
+@app.put("/profesor/editar_ejercicio/{ejercicio_id}")
+def editar_ejercicio(ejercicio_id: int, request: EditarEjercicioRequest):
+    print(f"📝 Editando ejercicio ID: {ejercicio_id}")
+    try:
+        conexion = database.obtener_conexion()
+        cursor = conexion.cursor()
+        
+        sql = """
+        UPDATE plan_ejercicios 
+        SET series = %s, reps = %s, rpe = %s, pausa = %s, anotaciones = %s
+        WHERE id = %s
+        """
+        cursor.execute(sql, (request.series, request.reps, request.rpe, request.pausa, request.anotaciones, ejercicio_id))
+        conexion.commit()
+        
+        cursor.close()
+        conexion.close()
+        return {"success": True, "mensaje": "Ejercicio actualizado con éxito"}
+    except Exception as e:
+        print(f"❌ Error al editar ejercicio: {e}")
+        return {"success": False, "mensaje": str(e)}
