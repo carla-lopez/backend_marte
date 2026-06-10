@@ -1062,11 +1062,11 @@ def clonar_semana(request: ClonarSemanaRequest):
         conexion = database.obtener_conexion()
         cursor = conexion.cursor(dictionary=True)
 
-        # 1. Traer todos los ejercicios exactos de la semana origen
+        # 1. Traer todos los ejercicios (AHORA INCLUIMOS EL CAMPO 'orden')
         sql_origen = """
         SELECT 
             pd.numero_dia, pb.nombre_bloque,
-            pe.nombre_ejercicio, pe.series, pe.reps, pe.rpe, pe.pausa, pe.modalidad, pe.anotaciones
+            pe.nombre_ejercicio, pe.series, pe.reps, pe.rpe, pe.pausa, pe.modalidad, pe.anotaciones, pe.orden
         FROM plan_semanas ps
         JOIN plan_dias pd ON ps.id = pd.id_semana
         JOIN plan_bloques pb ON pd.id = pb.id_dia
@@ -1079,7 +1079,7 @@ def clonar_semana(request: ClonarSemanaRequest):
         if not ejercicios_a_copiar:
             return {"success": False, "mensaje": "La semana anterior está vacía."}
 
-        # 2. Replicar la estructura (Semanas > Días > Bloques > Ejercicios) en el destino
+        # 2. Replicar la estructura en el destino
         for ej in ejercicios_a_copiar:
             # Semana
             cursor.execute("SELECT id FROM plan_semanas WHERE id_plan = %s AND numero_semana = %s", (request.plan_id, request.semana_destino))
@@ -1108,12 +1108,23 @@ def clonar_semana(request: ClonarSemanaRequest):
             else:
                 id_bloque_nuevo = bloque_row['id']
                 
-            # Ejercicio
+            # Limpieza defensiva de nulos para no tener problemas
+            series = ej['series'] if ej['series'] is not None else ""
+            reps = ej['reps'] if ej['reps'] is not None else ""
+            rpe = ej['rpe'] if ej['rpe'] is not None else ""
+            pausa = ej['pausa'] if ej['pausa'] is not None else ""
+            modalidad = ej['modalidad'] if ej['modalidad'] is not None else "Normal"
+            anotaciones = ej['anotaciones'] if ej['anotaciones'] is not None else ""
+            
+            # 💡 MAGIA ACÁ: Le asignamos el orden que trajo, o 0 si viene vacío
+            orden_ej = ej['orden'] if ej['orden'] is not None else 0
+
+            # Ejercicio (AHORA INSERTAMOS EL CAMPO 'orden')
             sql_ins_ej = """
-            INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, anotaciones)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, anotaciones, orden)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            cursor.execute(sql_ins_ej, (id_bloque_nuevo, ej['nombre_ejercicio'], ej['series'], ej['reps'], ej['rpe'], ej['pausa'], ej['modalidad'], ej['anotaciones']))
+            cursor.execute(sql_ins_ej, (id_bloque_nuevo, ej['nombre_ejercicio'], series, reps, rpe, pausa, modalidad, anotaciones, orden_ej))
 
         conexion.commit()
         cursor.close()

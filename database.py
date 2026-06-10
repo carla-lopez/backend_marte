@@ -109,16 +109,16 @@ def inicializar_base_de_datos():
     tabla_ejercicios = """
     CREATE TABLE IF NOT EXISTS plan_ejercicios (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        id_bloque INT NOT NULL,
-        nombre_ejercicio VARCHAR(100) NOT NULL,
-        series VARCHAR(20),
-        reps VARCHAR(20),
-        rpe VARCHAR(20),
-        pausa VARCHAR(50),
-        modalidad VARCHAR(50),
-        link_yt VARCHAR(255),
-        anotaciones TEXT,
-        orden INT NOT NULL,
+        id_bloque INT ,
+        nombre_ejercicio VARCHAR(255) NOT NULL,
+        series VARCHAR(100) DEFAULT '',
+        reps VARCHAR(100) DEFAULT '',
+        rpe VARCHAR(100) DEFAULT '',
+        pausa VARCHAR(100) DEFAULT '',
+        modalidad VARCHAR(100) DEFAULT 'Normal',
+        link_yt VARCHAR(255) NULL,
+        anotaciones TEXT NULL,
+        orden INT DEFAULT 0,
         FOREIGN KEY (id_bloque) REFERENCES plan_bloques(id) ON DELETE CASCADE
     );
     """
