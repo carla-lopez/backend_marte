@@ -147,7 +147,7 @@ def inicializar_base_de_datos():
     # Usuario semilla base
     usuario_defecto = """
     INSERT IGNORE INTO usuarios (id, nombre, email, password, rol) 
-    VALUES (1, 'Carla', 'carla@marte.com', '1234', 'Admin');
+    VALUES (1, 'Facu', 'facu@marte.com', '1234', 'Admin');
     """
 
     try:

@@ -65,7 +65,7 @@ def guardar_rm(request: RMRequest):
         
 # RUTA PARA OBTENER EL HISTORIAL DE RÉCORDS
 @app.get("/historial_rm")
-def obtener_historial(usuario: str = "Carla"):
+def obtener_historial(usuario: str = "juan"):
     print(f"🔍 Buscando el historial de RMs para: {usuario}")
     try:
         conexion = database.obtener_conexion()
@@ -77,12 +77,11 @@ def obtener_historial(usuario: str = "Carla"):
         sql = """
         SELECT r.id, r.ejercicio, r.peso_levantado, r.repeticiones, r.rm_calculado, r.fecha
         FROM records_rm r
-        JOIN usuarios u ON r.id_usuario = u.id
-        WHERE u.nombre = %s
+        WHERE r.id_usuario = %s
         ORDER BY r.fecha DESC, r.id DESC
         """
         
-        cursor.execute(sql, (usuario,))
+        cursor.execute(sql, (request.alumno_id,))
         historial = cursor.fetchall()
         
         cursor.close()
