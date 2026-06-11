@@ -1067,9 +1067,7 @@ def clonar_semana(request: ClonarSemanaRequest):
         semana_dest_row = cursor.fetchone()
         
         if semana_dest_row:
-            # Si ya existía, borramos todos sus ejercicios actuales para hacer una copia limpia desde cero
-            id_semana_dest = ...["id"] if isinstance(semana_dest_row, dict) else semana_dest_row[0] if isinstance(semana_dest_row, tuple) else semana_dest_row
-            # Pero para estar más seguros con el formato dictionary=True:
+            # Extraemos el ID directamente del diccionario de forma limpia
             id_semana_dest = semana_dest_row['id']
             
             cursor.execute("""
