@@ -730,15 +730,15 @@ def obtener_ejercicios_plan(plan_id: int):
         # Unimos todas las tablas hijas para traer el mapa completo del plan
         sql = """
         SELECT 
-            ps.numero_semana, pd.numero_dia,
-            pb.nombre_bloque,
-            pe.id, pe.nombre_ejercicio, pe.series, pe.reps, pe.modalidad
-        FROM plan_semanas ps
-        JOIN plan_dias pd ON ps.id = pd.id_semana
-        JOIN plan_bloques pb ON pd.id = pb.id_dia
-        JOIN plan_ejercicios pe ON pb.id = pe.id_bloque
+            pe.id, pe.id_bloque, pe.nombre_ejercicio, pe.series, pe.reps, 
+            pe.rpe, pe.pausa, pe.modalidad, pe.anotaciones, pe.orden,
+            pb.nombre_bloque, pd.numero_dia, ps.numero_semana
+        FROM plan_ejercicios pe
+        JOIN plan_bloques pb ON pe.id_bloque = pb.id
+        JOIN plan_dias pd ON pb.id_dia = pd.id
+        JOIN plan_semanas ps ON pd.id_semana = ps.id
         WHERE ps.id_plan = %s
-        ORDER BY ps.numero_semana ASC, pd.numero_dia ASC, pb.id ASC, pe.id ASC
+        ORDER BY ps.numero_semana, pd.numero_dia, pb.orden, pe.orden
         """
         cursor.execute(sql, (plan_id,))
         ejercicios = cursor.fetchall()
