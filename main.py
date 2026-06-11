@@ -15,73 +15,26 @@ class LoginRequest(BaseModel):
     password: str
 
     
-class RMRequest(BaseModel):
-    usuario: str
-    ejercicio: str
-    peso: float
-
-# RUTA DE GUARDADO REAL CONECTADA A MYSQL
-@app.post("/guardar_rm")
-def guardar_rm(request: RMRequest):
-    print(f"💪 ¡Procesando récord de {request.usuario} en {request.ejercicio} ({request.peso}kg)!")
-    
-    try:
-        conexion = database.obtener_conexion()
-        if not conexion:
-            return {"success": False, "mensaje": "Error de conexión con la base de datos"}
-            
-        cursor = conexion.cursor()
-        
-        # Buscamos el ID del usuario por su nombre. Si no existe, usamos el 1 por defecto.
-        cursor.execute("SELECT id FROM usuarios WHERE nombre = %s LIMIT 1", (request.usuario,))
-        resultado_usuario = cursor.fetchone()
-        id_usuario = resultado_usuario[0] if resultado_usuario else 1
-        
-        # Insertamos el registro en records_rm usando la fecha del servidor (CURDATE())
-        sql = """
-        INSERT INTO records_rm (id_usuario, ejercicio, peso_levantado, repeticiones, rm_calculado, fecha)
-        VALUES (%s, %s, %s, %s, %s, CURDATE())
-        """
-        # Mapeamos provisionalmente el peso enviado como el RM calculado
-        valores = (id_usuario, request.ejercicio, request.peso, 1, request.peso)
-        
-        cursor.execute(sql, valores)
-        conexion.commit()
-        
-        cursor.close()
-        conexion.close()
-        
-        return {
-            "success": True, 
-            "mensaje": f"¡Récord de {request.ejercicio} guardado con éxito en MySQL!"
-        }
-        
-    except Exception as e:
-        print(f"❌ Error al insertar en la base de datos: {e}")
-        return {
-            "success": False, 
-            "mensaje": f"No se pudo guardar el récord en la base de datos: {e}"
-        }
-        
-# RUTA PARA OBTENER EL HISTORIAL DE RÉCORDS
+# 1. ACTUALIZACIÓN DEL GET: Ahora recibe el id_usuario como parámetro
 @app.get("/historial_rm")
-def obtener_historial(usuario: str = "juan"):
-    print(f"🔍 Buscando el historial de RMs para: {usuario}")
+def obtener_historial(id_usuario: int): 
+    print(f"🔍 Buscando el historial de RMs para el ID: {id_usuario}")
     try:
         conexion = database.obtener_conexion()
         if not conexion:
-            return {"success": False, "mensaje": "Error de conexión con la base de datos"}
+            return {"success": False, "mensaje": "Error de BD"}
             
         cursor = conexion.cursor(dictionary=True)
         
+        # Filtramos estrictamente por id_usuario
         sql = """
-        SELECT r.id, r.ejercicio, r.peso_levantado, r.repeticiones, r.rm_calculado, r.fecha
-        FROM records_rm r
-        WHERE r.id_usuario = %s
-        ORDER BY r.fecha DESC, r.id DESC
+        SELECT id, ejercicio, peso_levantado, repeticiones, rm_calculado, fecha
+        FROM records_rm 
+        WHERE id_usuario = %s
+        ORDER BY fecha DESC, id DESC
         """
         
-        cursor.execute(sql, (request.alumno_id,))
+        cursor.execute(sql, (id_usuario,))
         historial = cursor.fetchall()
         
         cursor.close()
@@ -93,11 +46,48 @@ def obtener_historial(usuario: str = "juan"):
         }
         
     except Exception as e:
-        print(f"❌ Error al consultar el historial: {e}")
-        return {
-            "success": False, 
-            "mensaje": f"No se pudo obtener el historial: {e}"
-        }
+        print(f"❌ Error al consultar historial: {e}")
+        return {"success": False, "mensaje": str(e)}
+# 2. ACTUALIZACIÓN DEL MODELO Y POST: Ahora recibe el ID directamente
+# 1. EL MODELO NUEVO (Ahora pide id_usuario y reps)
+class RMRequest(BaseModel):
+    id_usuario: int
+    ejercicio: str
+    peso: float
+    reps: int       # Agregamos reps para que sea más completo
+
+# 2. EL POST (Guardar)
+@app.post("/guardar_rm")
+def guardar_rm(request: RMRequest):
+    print(f"💪 ¡Guardando récord! ID Usuario: {request.id_usuario} | Ejercicio: {request.ejercicio}")
+    
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión con la base de datos"}
+            
+        cursor = conexion.cursor()
+        
+        sql = """
+        INSERT INTO records_rm (id_usuario, ejercicio, peso_levantado, repeticiones, rm_calculado, fecha)
+        VALUES (%s, %s, %s, %s, %s, CURDATE())
+        """
+        # Calculamos un RM básico en el backend por si acaso, o usamos el peso directo
+        rm_calc = request.peso * (1 + (request.reps / 30)) if request.reps > 1 else request.peso
+        
+        valores = (request.id_usuario, request.ejercicio, request.peso, request.reps, rm_calc)
+        
+        cursor.execute(sql, valores)
+        conexion.commit()
+        
+        cursor.close()
+        conexion.close()
+        
+        return {"success": True, "mensaje": "¡Récord guardado con éxito!"}
+        
+    except Exception as e:
+        print(f"❌ Error al insertar: {e}")
+        return {"success": False, "mensaje": str(e)}
         
 # --- NUEVO MODELO PARA RECIBIR LOS PESOS ---
 class PesosSesionRequest(BaseModel):
