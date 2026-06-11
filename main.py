@@ -1067,9 +1067,7 @@ def clonar_semana(request: ClonarSemanaRequest):
         semana_dest_row = cursor.fetchone()
         
         if semana_dest_row:
-            # Extraemos el ID directamente del diccionario de forma limpia
             id_semana_dest = semana_dest_row['id']
-            
             cursor.execute("""
                 DELETE pe FROM plan_ejercicios pe
                 JOIN plan_bloques pb ON pe.id_bloque = pb.id
@@ -1078,7 +1076,7 @@ def clonar_semana(request: ClonarSemanaRequest):
             """, (id_semana_dest,))
             conexion.commit()
 
-        # 2. Traer todos los ejercicios de la semana origen (incluyendo nombres de día y órdenes)
+        # 2. Traer ejercicios de origen (💡 AHORA CON ORDENACIÓN ESTRICTA)
         sql_origen = """
         SELECT 
             pd.numero_dia, pd.nombre_dia, pb.nombre_bloque, pb.orden as bloque_orden,
@@ -1088,6 +1086,7 @@ def clonar_semana(request: ClonarSemanaRequest):
         JOIN plan_bloques pb ON pd.id = pb.id_dia
         JOIN plan_ejercicios pe ON pb.id = pe.id_bloque
         WHERE ps.id_plan = %s AND ps.numero_semana = %s
+        ORDER BY pd.numero_dia, pb.orden, pe.orden
         """
         cursor.execute(sql_origen, (request.plan_id, request.semana_origen))
         ejercicios_a_copiar = cursor.fetchall()
@@ -1102,11 +1101,11 @@ def clonar_semana(request: ClonarSemanaRequest):
         else:
             id_semana_nueva = semana_dest_row['id']
 
-        # 🧠 MAPEO EN MEMORIA: Evita duplicar días y bloques usando diccionarios locales
-        mapa_dias = {}     # clave: numero_dia -> valor: id_dia_nuevo
-        mapa_bloques = {}  # clave: (id_dia_nuevo, nombre_bloque) -> valor: id_bloque_nuevo
+        # MAPEO EN MEMORIA: Evita duplicar días y bloques
+        mapa_dias = {}     
+        mapa_bloques = {}  
 
-        # 4. Replicar la estructura sin redundancias
+        # 4. Replicar la estructura manteniendo la secuencia exacta
         for ej in ejercicios_a_copiar:
             num_dia = ej['numero_dia']
             nombre_bloque = ej['nombre_bloque']
@@ -1145,7 +1144,7 @@ def clonar_semana(request: ClonarSemanaRequest):
             anotaciones = ej['anotaciones'] if ej['anotaciones'] is not None else ""
             orden_ej = ej['orden'] if ej['orden'] is not None else 0
 
-            # Insertar el Ejercicio de forma limpia
+            # Insertar el Ejercicio en el orden correcto
             sql_ins_ej = """
             INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, anotaciones, orden)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
