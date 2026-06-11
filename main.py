@@ -456,6 +456,7 @@ class AgregarEjercicioRequest(BaseModel):
     numero_semana: int
     numero_dia: int
     nombre_bloque: str  # Ej: "BLOQUE A - FUERZA"
+    bloque_orden: int   # 💡 NUEVO: Recibe el número calculado por Flutter
     nombre_ejercicio: str
     series: str
     reps: str
@@ -498,7 +499,11 @@ def agregar_ejercicio_plan(request: AgregarEjercicioRequest):
         if bloque:
             id_bloque = bloque['id']
         else:
-            cursor.execute("INSERT INTO plan_bloques (id_dia, nombre_bloque, orden) VALUES (%s, %s, 1)", (id_dia, request.nombre_bloque.upper()))
+            # 💡 REEMPLAZAMOS EL 1 HARDCODEADO POR EL VALOR REAL QUE MANDÓ FLUTTER
+            cursor.execute(
+                "INSERT INTO plan_bloques (id_dia, nombre_bloque, orden) VALUES (%s, %s, %s)", 
+                (id_dia, request.nombre_bloque.upper(), request.bloque_orden)
+            )
             id_bloque = cursor.lastrowid
 
         # 4. Insertar el Ejercicio Final
@@ -516,7 +521,6 @@ def agregar_ejercicio_plan(request: AgregarEjercicioRequest):
         cursor.close()
         conexion.close()
         return {"success": True, "mensaje": "¡Ejercicio acoplado al plan con éxito!"}
-    
         
     except Exception as e:
         print(f"❌ Error al planificar: {e}")
