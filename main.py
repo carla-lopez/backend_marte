@@ -719,15 +719,11 @@ def crear_plan(request: CrearPlanRequest):
 # --- RUTA PARA VER LOS EJERCICIOS DE UN PLAN ESPECÍFICO ---
 @app.get("/profesor/plan/{plan_id}/ejercicios")
 def obtener_ejercicios_plan(plan_id: int):
-    print(f"🔍 Buscando radiografía de ejercicios para el plan ID: {plan_id}")
     try:
         conexion = database.obtener_conexion()
-        if not conexion:
-            return []
-            
         cursor = conexion.cursor(dictionary=True)
         
-        # Unimos todas las tablas hijas para traer el mapa completo del plan
+        # 💡 EL SECRETO: El CASE WHEN en el ORDER BY fuerza la "Entrada" arriba
         sql = """
         SELECT 
             pe.id, pe.id_bloque, pe.nombre_ejercicio, pe.series, pe.reps, 
@@ -738,17 +734,28 @@ def obtener_ejercicios_plan(plan_id: int):
         JOIN plan_dias pd ON pb.id_dia = pd.id
         JOIN plan_semanas ps ON pd.id_semana = ps.id
         WHERE ps.id_plan = %s
-        ORDER BY ps.numero_semana, pd.numero_dia, pb.orden, pe.orden
+        ORDER BY 
+            ps.numero_semana ASC, 
+            pd.numero_dia ASC, 
+            CASE 
+                WHEN LOWER(pb.nombre_bloque) LIKE '%%entrada%%' THEN 0 
+                WHEN LOWER(pb.nombre_bloque) LIKE '%%warm%%' THEN 0
+                ELSE 1 
+            END ASC,
+            pb.nombre_bloque ASC,
+            pe.orden ASC
         """
+        # Nota: Usamos '%%' porque mysql-connector usa %s para las variables, 
+        # así evitamos que Python se confunda con el formato.
+        
         cursor.execute(sql, (plan_id,))
         ejercicios = cursor.fetchall()
         
         cursor.close()
         conexion.close()
         return ejercicios
-        
     except Exception as e:
-        print(f"❌ Error al cargar ejercicios del plan {plan_id}: {e}")
+        print(f"❌ Error al obtener ejercicios: {e}")
         return []
     
 class AsignarPlanRequest(BaseModel):
