@@ -1062,10 +1062,28 @@ def clonar_semana(request: ClonarSemanaRequest):
         conexion = database.obtener_conexion()
         cursor = conexion.cursor(dictionary=True)
 
-        # 1. Traer todos los ejercicios (AHORA INCLUIMOS EL CAMPO 'orden')
+        # 1. 🛡️ ESCUDO DE LIMPIEZA: Buscar si la semana destino ya existe
+        cursor.execute("SELECT id FROM plan_semanas WHERE id_plan = %s AND numero_semana = %s", (request.plan_id, request.semana_destino))
+        semana_dest_row = cursor.fetchone()
+        
+        if semana_dest_row:
+            # Si ya existía, borramos todos sus ejercicios actuales para hacer una copia limpia desde cero
+            id_semana_dest = ...["id"] if isinstance(semana_dest_row, dict) else semana_dest_row[0] if isinstance(semana_dest_row, tuple) else semana_dest_row
+            # Pero para estar más seguros con el formato dictionary=True:
+            id_semana_dest = semana_dest_row['id']
+            
+            cursor.execute("""
+                DELETE pe FROM plan_ejercicios pe
+                JOIN plan_bloques pb ON pe.id_bloque = pb.id
+                JOIN plan_dias pd ON pb.id_dia = pd.id
+                WHERE pd.id_semana = %s
+            """, (id_semana_dest,))
+            conexion.commit()
+
+        # 2. Traer todos los ejercicios de la semana origen (incluyendo nombres de día y órdenes)
         sql_origen = """
         SELECT 
-            pd.numero_dia, pb.nombre_bloque,
+            pd.numero_dia, pd.nombre_dia, pb.nombre_bloque, pb.orden as bloque_orden,
             pe.nombre_ejercicio, pe.series, pe.reps, pe.rpe, pe.pausa, pe.modalidad, pe.anotaciones, pe.orden
         FROM plan_semanas ps
         JOIN plan_dias pd ON ps.id = pd.id_semana
@@ -1079,47 +1097,57 @@ def clonar_semana(request: ClonarSemanaRequest):
         if not ejercicios_a_copiar:
             return {"success": False, "mensaje": "La semana anterior está vacía."}
 
-        # 2. Replicar la estructura en el destino
+        # 3. Asegurar la fila de la semana destino
+        if not semana_dest_row:
+            cursor.execute("INSERT INTO plan_semanas (id_plan, numero_semana) VALUES (%s, %s)", (request.plan_id, request.semana_destino))
+            id_semana_nueva = cursor.lastrowid
+        else:
+            id_semana_nueva = semana_dest_row['id']
+
+        # 🧠 MAPEO EN MEMORIA: Evita duplicar días y bloques usando diccionarios locales
+        mapa_dias = {}     # clave: numero_dia -> valor: id_dia_nuevo
+        mapa_bloques = {}  # clave: (id_dia_nuevo, nombre_bloque) -> valor: id_bloque_nuevo
+
+        # 4. Replicar la estructura sin redundancias
         for ej in ejercicios_a_copiar:
-            # Semana
-            cursor.execute("SELECT id FROM plan_semanas WHERE id_plan = %s AND numero_semana = %s", (request.plan_id, request.semana_destino))
-            semana_row = cursor.fetchone()
-            if not semana_row:
-                cursor.execute("INSERT INTO plan_semanas (id_plan, numero_semana) VALUES (%s, %s)", (request.plan_id, request.semana_destino))
-                id_semana_nueva = cursor.lastrowid
-            else:
-                id_semana_nueva = semana_row['id']
-                
-            # Día
-            cursor.execute("SELECT id FROM plan_dias WHERE id_semana = %s AND numero_dia = %s", (id_semana_nueva, ej['numero_dia']))
-            dia_row = cursor.fetchone()
-            if not dia_row:
-                cursor.execute("INSERT INTO plan_dias (id_semana, numero_dia) VALUES (%s, %s)", (id_semana_nueva, ej['numero_dia']))
-                id_dia_nuevo = cursor.lastrowid
-            else:
-                id_dia_nuevo = dia_row['id']
-                
-            # Bloque
-            cursor.execute("SELECT id FROM plan_bloques WHERE id_dia = %s AND nombre_bloque = %s", (id_dia_nuevo, ej['nombre_bloque']))
-            bloque_row = cursor.fetchone()
-            if not bloque_row:
-                cursor.execute("INSERT INTO plan_bloques (id_dia, nombre_bloque) VALUES (%s, %s)", (id_dia_nuevo, ej['nombre_bloque']))
-                id_bloque_nuevo = cursor.lastrowid
-            else:
-                id_bloque_nuevo = bloque_row['id']
-                
-            # Limpieza defensiva de nulos para no tener problemas
+            num_dia = ej['numero_dia']
+            nombre_bloque = ej['nombre_bloque']
+
+            # Gestionar el Día
+            if num_dia not in mapa_dias:
+                cursor.execute("SELECT id FROM plan_dias WHERE id_semana = %s AND numero_dia = %s", (id_semana_nueva, num_dia))
+                dia_existente = cursor.fetchone()
+                if not dia_existente:
+                    cursor.execute("INSERT INTO plan_dias (id_semana, numero_dia, nombre_dia) VALUES (%s, %s, %s)", (id_semana_nueva, num_dia, ej['nombre_dia']))
+                    mapa_dias[num_dia] = cursor.lastrowid
+                else:
+                    mapa_dias[num_dia] = dia_existente['id']
+            
+            id_dia_nuevo = mapa_dias[num_dia]
+
+            # Gestionar el Bloque
+            clave_bloque = (id_dia_nuevo, nombre_bloque)
+            if clave_bloque not in mapa_bloques:
+                cursor.execute("SELECT id FROM plan_bloques WHERE id_dia = %s AND nombre_bloque = %s", (id_dia_nuevo, nombre_bloque))
+                bloque_existente = cursor.fetchone()
+                if not bloque_existente:
+                    cursor.execute("INSERT INTO plan_bloques (id_dia, nombre_bloque, orden) VALUES (%s, %s, %s)", (id_dia_nuevo, nombre_bloque, ej['bloque_orden']))
+                    mapa_bloques[clave_bloque] = cursor.lastrowid
+                else:
+                    mapa_bloques[clave_bloque] = bloque_existente['id']
+
+            id_bloque_nuevo = mapa_bloques[clave_bloque]
+
+            # Limpieza defensiva de nulos
             series = ej['series'] if ej['series'] is not None else ""
             reps = ej['reps'] if ej['reps'] is not None else ""
             rpe = ej['rpe'] if ej['rpe'] is not None else ""
             pausa = ej['pausa'] if ej['pausa'] is not None else ""
             modalidad = ej['modalidad'] if ej['modalidad'] is not None else "Normal"
             anotaciones = ej['anotaciones'] if ej['anotaciones'] is not None else ""
-            
-            # 💡 MAGIA ACÁ: Le asignamos el orden que trajo, o 0 si viene vacío
             orden_ej = ej['orden'] if ej['orden'] is not None else 0
 
-            # Ejercicio (AHORA INSERTAMOS EL CAMPO 'orden')
+            # Insertar el Ejercicio de forma limpia
             sql_ins_ej = """
             INSERT INTO plan_ejercicios (id_bloque, nombre_ejercicio, series, reps, rpe, pausa, modalidad, anotaciones, orden)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -1131,7 +1159,7 @@ def clonar_semana(request: ClonarSemanaRequest):
         conexion.close()
         return {"success": True, "mensaje": "Estructura replicada con éxito"}
     except Exception as e:
-        print(f"❌ Error al clonar semana: {e}")
+        print(f"❌ Error crítico al clonar semana: {e}")
         return {"success": False, "mensaje": str(e)}
     
 class EditarEjercicioRequest(BaseModel):
