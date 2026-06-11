@@ -723,7 +723,6 @@ def obtener_ejercicios_plan(plan_id: int):
         conexion = database.obtener_conexion()
         cursor = conexion.cursor(dictionary=True)
         
-        # 💡 EL SECRETO: El CASE WHEN en el ORDER BY fuerza la "Entrada" arriba
         sql = """
         SELECT 
             pe.id, pe.id_bloque, pe.nombre_ejercicio, pe.series, pe.reps, 
@@ -737,16 +736,9 @@ def obtener_ejercicios_plan(plan_id: int):
         ORDER BY 
             ps.numero_semana ASC, 
             pd.numero_dia ASC, 
-            CASE 
-                WHEN LOWER(pb.nombre_bloque) LIKE '%%entrada%%' THEN 0 
-                WHEN LOWER(pb.nombre_bloque) LIKE '%%warm%%' THEN 0
-                ELSE 1 
-            END ASC,
-            pb.nombre_bloque ASC,
-            pe.orden ASC
+            pb.orden ASC,       # 💡 AHORA MANDA EL ORDEN DEL BLOQUE
+            pe.orden ASC        # Y LUEGO EL ORDEN DEL EJERCICIO
         """
-        # Nota: Usamos '%%' porque mysql-connector usa %s para las variables, 
-        # así evitamos que Python se confunda con el formato.
         
         cursor.execute(sql, (plan_id,))
         ejercicios = cursor.fetchall()
