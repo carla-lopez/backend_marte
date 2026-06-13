@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import database
 from datetime import date, timedelta
+from flask import Flask, request, jsonify
 
 app = FastAPI(title="API de Marte Training")
 
@@ -1179,3 +1180,52 @@ def editar_ejercicio(ejercicio_id: int, request: EditarEjercicioRequest):
     except Exception as e:
         print(f"❌ Error al editar ejercicio: {e}")
         return {"success": False, "mensaje": str(e)}
+    
+# ==========================================
+# 🏋️‍♂️ RUTA PARA ACTUALIZAR EL WOD (PROFESOR)
+# ==========================================
+@app.route('/profesor/actualizar_wod', methods=['PUT'])
+def actualizar_wod():
+    try:
+        data = request.get_json()
+        nuevo_texto = data.get('texto_wod')
+
+        if not nuevo_texto:
+            return jsonify({"error": "El texto no puede estar vacío"}), 400
+
+        cur = mysql.connection.cursor()
+        
+        # Guardamos el WOD en una tabla de configuraciones (ej: id = 1)
+        # Si no tenés una tabla así, te explico abajo cómo crearla
+        cur.execute("""
+            UPDATE configuracion_app 
+            SET valor = %s 
+            WHERE clave = 'wod_del_dia'
+        """, (nuevo_texto,))
+        
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({"success": True, "message": "WOD actualizado correctamente"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ==========================================
+# 📱 RUTA PARA LEER EL WOD (ALUMNOS Y PROFE)
+# ==========================================
+@app.route('/inicio/obtener_wod', methods=['GET'])
+def obtener_wod():
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT valor FROM configuracion_app WHERE clave = 'wod_del_dia'")
+        resultado = cur.fetchone()
+        cur.close()
+
+        if resultado:
+            return jsonify({"texto_wod": resultado[0]}), 200
+        else:
+            return jsonify({"texto_wod": "Entrenamiento no cargado aún."}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
