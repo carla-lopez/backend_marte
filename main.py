@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import database
 from datetime import date, timedelta
-from flask import Flask, request, jsonify
 
 app = FastAPI(title="API de Marte Training")
 
@@ -1182,50 +1181,66 @@ def editar_ejercicio(ejercicio_id: int, request: EditarEjercicioRequest):
         return {"success": False, "mensaje": str(e)}
     
 # ==========================================
-# 🏋️‍♂️ RUTA PARA ACTUALIZAR EL WOD (PROFESOR)
+# 🏋️‍♂️ MODELO Y RUTA PARA ACTUALIZAR EL WOD
 # ==========================================
-@app.route('/profesor/actualizar_wod', methods=['PUT'])
-def actualizar_wod():
+class WodRequest(BaseModel):
+    texto_wod: str
+
+@app.put('/profesor/actualizar_wod')
+def actualizar_wod(request: WodRequest):
+    print("📝 Actualizando el WOD del día...")
     try:
-        data = request.get_json()
-        nuevo_texto = data.get('texto_wod')
+        nuevo_texto = request.texto_wod
 
         if not nuevo_texto:
-            return jsonify({"error": "El texto no puede estar vacío"}), 400
+            return {"success": False, "mensaje": "El texto no puede estar vacío"}
 
-        cur = mysql.connection.cursor()
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión a BD"}
         
-        # Guardamos el WOD en una tabla de configuraciones (ej: id = 1)
-        # Si no tenés una tabla así, te explico abajo cómo crearla
-        cur.execute("""
+        cursor = conexion.cursor()
+        
+        # Actualizamos el texto en la base de datos
+        cursor.execute("""
             UPDATE configuracion_app 
             SET valor = %s 
             WHERE clave = 'wod_del_dia'
         """, (nuevo_texto,))
         
-        mysql.connection.commit()
-        cur.close()
+        conexion.commit()
+        cursor.close()
+        conexion.close()
 
-        return jsonify({"success": True, "message": "WOD actualizado correctamente"}), 200
+        return {"success": True, "mensaje": "WOD actualizado correctamente"}
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Error al actualizar WOD: {e}")
+        return {"success": False, "mensaje": str(e)}
 
 # ==========================================
 # 📱 RUTA PARA LEER EL WOD (ALUMNOS Y PROFE)
 # ==========================================
-@app.route('/inicio/obtener_wod', methods=['GET'])
+@app.get('/inicio/obtener_wod')
 def obtener_wod():
     try:
-        cur = mysql.connection.cursor()
-        cur.execute("SELECT valor FROM configuracion_app WHERE clave = 'wod_del_dia'")
-        resultado = cur.fetchone()
-        cur.close()
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"texto_wod": "Error de conexión a la base de datos."}
+
+        cursor = conexion.cursor()
+        cursor.execute("SELECT valor FROM configuracion_app WHERE clave = 'wod_del_dia'")
+        resultado = cursor.fetchone()
+        
+        cursor.close()
+        conexion.close()
 
         if resultado:
-            return jsonify({"texto_wod": resultado[0]}), 200
+            # fetchone() devuelve una tupla, el texto está en la posición 0
+            return {"texto_wod": resultado[0]}
         else:
-            return jsonify({"texto_wod": "Entrenamiento no cargado aún."}), 200
+            return {"texto_wod": "Entrenamiento no cargado aún."}
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Error al leer WOD: {e}")
+        return {"texto_wod": "Fallo de conexión."}
