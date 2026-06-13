@@ -937,13 +937,13 @@ def obtener_historial_alumno(alumno_id: int):
             
         cursor = conexion.cursor(dictionary=True)
         
-        # Cruzamos la tabla de historial con la de planes para saber la categoría (Fuerza/CrossFit)
+        # 💡 EL CAMBIO ESTÁ EN EL ORDER BY (Usa h.id DESC para asegurar precisión absoluta)
         sql = """
         SELECT h.id AS historial_id, h.id_plan, h.nombre_ciclo, h.fecha_asignacion, p.categoria
         FROM historial_rutinas h
         JOIN planes p ON h.id_plan = p.id
         WHERE h.id_alumno = %s
-        ORDER BY h.fecha_asignacion DESC
+        ORDER BY h.id DESC
         """
         cursor.execute(sql, (alumno_id,))
         historial = cursor.fetchall()
