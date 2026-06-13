@@ -871,7 +871,7 @@ def crear_plan_personalizado(request: PlanPersonalizadoRequest):
             
         cursor = conexion.cursor(dictionary=True)
         
-        # 1. Buscamos el nombre del alumno para bautizar su plan personalizado
+        # 1. Buscamos el nombre del alumno para bautizar su plan
         cursor.execute("SELECT nombre FROM usuarios WHERE id = %s", (request.alumno_id,))
         alumno = cursor.fetchone()
         if not alumno:
@@ -879,24 +879,25 @@ def crear_plan_personalizado(request: PlanPersonalizadoRequest):
             
         nombre_plan_personalizado = f"Rutina - {alumno['nombre']}"
         
-        # 2. Insertamos el nuevo esqueleto de plan en la tabla 'planes'
+        # 2. Insertamos el nuevo esqueleto en 'planes'
         sql_plan = "INSERT INTO planes (nombre, categoria) VALUES (%s, %s)"
         cursor.execute(sql_plan, (nombre_plan_personalizado, request.categoria))
         nuevo_plan_id = cursor.lastrowid
         
-        # 3. Se lo enlazamos al alumno inmediatamente y reseteamos su ciclo a Semana 1
-        sql_usuario = """
-        UPDATE usuarios 
-        SET id_plan = %s, categoria = %s, semana_actual = 1 
-        WHERE id = %s
-        """
+        # 3. Lo enlazamos al alumno
+        sql_usuario = "UPDATE usuarios SET id_plan = %s, categoria = %s, semana_actual = 1 WHERE id = %s"
         cursor.execute(sql_usuario, (nuevo_plan_id, request.categoria, request.alumno_id))
+        
+        # 💡 LA SOLUCIÓN: Lo anotamos en el historial para que aparezca en la app
+        cursor.execute(
+            "INSERT INTO historial_rutinas (id_alumno, id_plan, nombre_ciclo) VALUES (%s, %s, %s)", 
+            (request.alumno_id, nuevo_plan_id, nombre_plan_personalizado)
+        )
         
         conexion.commit()
         cursor.close()
         conexion.close()
         
-        # Devolvemos los datos clave para que Flutter pueda abrir la pantalla del editor
         return {
             "success": True,
             "plan_id": nuevo_plan_id,
