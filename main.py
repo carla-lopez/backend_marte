@@ -937,18 +937,19 @@ def obtener_historial_alumno(alumno_id: int):
             
         cursor = conexion.cursor(dictionary=True)
         
-        # 💡 LA MAGIA ESTÁ ACÁ: Cambiamos 'ORDER BY h.fecha_asignacion DESC' por 'ORDER BY h.id DESC'
+        # 💡 LA MAGIA SUPREMA: Compara el ID del plan con el que el alumno tiene asignado HOY.
+        # El que coincide, se ancla obligatoriamente en la posición 0 (Activa).
         sql = """
         SELECT h.id AS historial_id, h.id_plan, h.nombre_ciclo, h.fecha_asignacion, p.categoria
         FROM historial_rutinas h
         JOIN planes p ON h.id_plan = p.id
+        JOIN usuarios u ON u.id = h.id_alumno
         WHERE h.id_alumno = %s
-        ORDER BY h.id DESC
+        ORDER BY (h.id_plan = u.id_plan) DESC, h.id DESC
         """
         cursor.execute(sql, (alumno_id,))
         historial = cursor.fetchall()
         
-        # Formateamos la fecha para mostrarla prolija
         for h in historial:
             if h['fecha_asignacion']:
                 h['fecha_asignacion'] = h['fecha_asignacion'].strftime("%d/%m/%Y")
