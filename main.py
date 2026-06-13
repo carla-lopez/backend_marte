@@ -1029,7 +1029,7 @@ def finalizar_plan(plan_id: int):
         abrev_siguiente = meses_abrev[idx_mes_siguiente]
         anio = hoy.year
         
-        nuevo_titulo = f"Rutina {nombre_atleta} {abrev_actual}-{abrev_siguiente} {anio}"
+        nuevo_titulo = nuevo_titulo[:50]
         
         # 3. Actualizar el nombre definitivo en la tabla general de planes
         cursor.execute("UPDATE planes SET nombre = %s WHERE id = %s", (nuevo_titulo, plan_id))
