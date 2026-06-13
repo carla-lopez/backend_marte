@@ -937,7 +937,7 @@ def obtener_historial_alumno(alumno_id: int):
             
         cursor = conexion.cursor(dictionary=True)
         
-        # 💡 EL CAMBIO ESTÁ EN EL ORDER BY (Usa h.id DESC para asegurar precisión absoluta)
+        # 💡 LA MAGIA ESTÁ ACÁ: Cambiamos 'ORDER BY h.fecha_asignacion DESC' por 'ORDER BY h.id DESC'
         sql = """
         SELECT h.id AS historial_id, h.id_plan, h.nombre_ciclo, h.fecha_asignacion, p.categoria
         FROM historial_rutinas h
@@ -948,7 +948,7 @@ def obtener_historial_alumno(alumno_id: int):
         cursor.execute(sql, (alumno_id,))
         historial = cursor.fetchall()
         
-        # Formateamos la fecha para mostrarla prolija en la app (Día/Mes/Año)
+        # Formateamos la fecha para mostrarla prolija
         for h in historial:
             if h['fecha_asignacion']:
                 h['fecha_asignacion'] = h['fecha_asignacion'].strftime("%d/%m/%Y")
