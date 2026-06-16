@@ -1368,3 +1368,60 @@ def obtener_pesos(alumno_id: int, id_ejercicio: int, semana: int, dia: int):
     except Exception as e:
         print(f"❌ Error al obtener pesos: {e}")
         return {"success": False, "mensaje": str(e)}
+    
+# 1. Definimos la estructura de datos que va a mandar el celular
+class CompletarSesionRequest(BaseModel):
+    id_alumno: int
+    numero_semana: int
+    numero_dia: int
+    rpe_sentido: int
+
+# 2. Creamos la ruta para guardar la sesión terminada
+@app.post("/alumno/completar_sesion")
+def completar_sesion(request: CompletarSesionRequest):
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión a la BD"}
+            
+        cursor = conexion.cursor(dictionary=True)
+
+        # Buscamos cuál es el plan actual del alumno (Igual que hicimos con los pesos)
+        cursor.execute("SELECT id_plan FROM usuarios WHERE id = %s", (request.id_alumno,))
+        alumno_db = cursor.fetchone()
+        
+        if not alumno_db or not alumno_db['id_plan']:
+            return {"success": False, "mensaje": "El alumno no tiene un plan activo asignado."}
+            
+        id_plan_real = alumno_db['id_plan']
+
+        # Verificamos si el alumno ya había marcado este día como completado antes
+        # (Para evitar que se duplique la asistencia si toca el botón dos veces por error)
+        sql_check = """
+        SELECT id FROM sesiones_completadas 
+        WHERE id_alumno = %s AND id_plan = %s AND numero_semana = %s AND numero_dia = %s
+        """
+        cursor.execute(sql_check, (request.id_alumno, id_plan_real, request.numero_semana, request.numero_dia))
+        sesion_existente = cursor.fetchone()
+
+        if sesion_existente:
+            # Si ya existía, solo le actualizamos el RPE por si cambió de opinión
+            sql_update = "UPDATE sesiones_completadas SET rpe_sentido = %s WHERE id = %s"
+            cursor.execute(sql_update, (request.rpe_sentido, sesion_existente['id']))
+        else:
+            # Si es la primera vez que lo toca, creamos el registro nuevo
+            sql_insert = """
+            INSERT INTO sesiones_completadas (id_alumno, id_plan, numero_semana, numero_dia, rpe_sentido)
+            VALUES (%s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql_insert, (request.id_alumno, id_plan_real, request.numero_semana, request.numero_dia, request.rpe_sentido))
+
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        
+        return {"success": True, "mensaje": "Entrenamiento finalizado con éxito"}
+        
+    except Exception as e:
+        print(f"❌ Error al completar sesión: {e}")
+        return {"success": False, "mensaje": str(e)}
