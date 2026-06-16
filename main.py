@@ -1337,3 +1337,34 @@ def guardar_pesos(request: GuardarPesosRequest):
     except Exception as e:
         print(f"❌ Error al guardar pesos: {e}")
         return {"success": False, "mensaje": str(e)}
+    
+@app.get("/alumno/obtener_pesos")
+def obtener_pesos(alumno_id: int, id_ejercicio: int, semana: int, dia: int):
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión a la BD"}
+            
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Buscamos los pesos ordenados por el número de serie (S1, S2, S3...)
+        sql = """
+        SELECT peso_usado 
+        FROM registro_pesos 
+        WHERE id_alumno = %s AND id_ejercicio = %s AND numero_semana = %s AND numero_dia = %s
+        ORDER BY numero_serie ASC
+        """
+        cursor.execute(sql, (alumno_id, id_ejercicio, semana, dia))
+        resultados = cursor.fetchall()
+        
+        # Armamos una listita solo con los números (Ej: [50.0, 50.0, 55.0, 0.0])
+        pesos = [fila['peso_usado'] for fila in resultados]
+        
+        cursor.close()
+        conexion.close()
+        
+        return {"success": True, "pesos": pesos}
+        
+    except Exception as e:
+        print(f"❌ Error al obtener pesos: {e}")
+        return {"success": False, "mensaje": str(e)}
