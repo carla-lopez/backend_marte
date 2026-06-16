@@ -1455,3 +1455,37 @@ def obtener_dias_completados(alumno_id: int):
     except Exception as e:
         print(f"❌ Error al obtener días completados: {e}")
         return {"success": False, "dias": []}
+    
+# =========================================================
+# 📊 RUTA PARA QUE EL PROFE VEA EL PROGRESO DEL ALUMNO
+# =========================================================
+@app.get("/profesor/seguimiento_plan/{plan_id}/{alumno_id}")
+def seguimiento_plan(plan_id: int, alumno_id: int):
+    try:
+        conexion = database.obtener_conexion()
+        cursor = conexion.cursor(dictionary=True)
+        
+        # 1. Buscamos qué días terminó el alumno y qué RPE le puso
+        cursor.execute("""
+            SELECT numero_semana, numero_dia, rpe_sentido 
+            FROM sesiones_completadas 
+            WHERE id_plan = %s AND id_alumno = %s
+        """, (plan_id, alumno_id))
+        sesiones = cursor.fetchall()
+        
+        # 2. Buscamos los kilos exactos que anotó en cada serie
+        cursor.execute("""
+            SELECT id_ejercicio, numero_serie, peso_usado 
+            FROM registro_pesos 
+            WHERE id_plan = %s AND id_alumno = %s
+        """, (plan_id, alumno_id))
+        pesos = cursor.fetchall()
+        
+        cursor.close()
+        conexion.close()
+        
+        return {"success": True, "sesiones": sesiones, "pesos": pesos}
+        
+    except Exception as e:
+        print(f"❌ Error al obtener seguimiento: {e}")
+        return {"success": False, "mensaje": str(e)}
