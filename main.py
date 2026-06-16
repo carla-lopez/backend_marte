@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import database
 from datetime import date, timedelta
+from typing import List
 
 app = FastAPI(title="API de Marte Training")
 
@@ -1264,3 +1265,66 @@ def obtener_wod():
     except Exception as e:
         print(f"❌ Error al leer WOD: {e}")
         return {"texto_wod": "Fallo de conexión."}
+    
+# 1. Definimos la estructura de lo que nos va a mandar el celular del alumno
+class SerieData(BaseModel):
+    numero_serie: int
+    reps_realizadas: int
+    peso_usado: float
+
+class GuardarPesosRequest(BaseModel):
+    id_alumno: int
+    id_plan: int
+    id_ejercicio: int
+    numero_semana: int
+    numero_dia: int
+    series: List[SerieData] # Esto recibe la lista de las cajitas S1, S2, S3...
+
+# 2. Creamos la ruta para guardar la información
+@app.post("/alumno/guardar_pesos")
+def guardar_pesos(request: GuardarPesosRequest):
+    try:
+        conexion = database.obtener_conexion()
+        if not conexion:
+            return {"success": False, "mensaje": "Error de conexión a la BD"}
+            
+        cursor = conexion.cursor()
+
+        # PASO A: Borramos los pesos viejos de ese mismo ejercicio ese mismo día.
+        # (Esto es un "truco" por si el alumno se equivoca, corrige el peso y vuelve a apretar "Guardar")
+        sql_delete = """
+        DELETE FROM registro_pesos 
+        WHERE id_alumno = %s AND id_plan = %s AND id_ejercicio = %s AND numero_semana = %s AND numero_dia = %s
+        """
+        cursor.execute(sql_delete, (request.id_alumno, request.id_plan, request.id_ejercicio, request.numero_semana, request.numero_dia))
+
+        # PASO B: Insertamos fila por fila los pesos de cada cajita (S1, S2, etc.)
+        sql_insert = """
+        INSERT INTO registro_pesos 
+        (id_alumno, id_plan, id_ejercicio, numero_semana, numero_dia, numero_serie, reps_realizadas, peso_usado)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        
+        for serie in request.series:
+            # Solo guardamos si el alumno le puso un peso mayor a 0 (por si dejó alguna cajita vacía)
+            if serie.peso_usado > 0:
+                cursor.execute(sql_insert, (
+                    request.id_alumno, 
+                    request.id_plan, 
+                    request.id_ejercicio, 
+                    request.numero_semana, 
+                    request.numero_dia, 
+                    serie.numero_serie, 
+                    serie.reps_realizadas, 
+                    serie.peso_usado
+                ))
+
+        conexion.commit()
+        cursor.close()
+        conexion.close()
+        
+        return {"success": True, "mensaje": "Pesos guardados correctamente"}
+        
+    except Exception as e:
+        print(f"❌ Error al guardar pesos: {e}")
+        return {"success": False, "mensaje": str(e)}
