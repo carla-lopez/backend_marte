@@ -1288,17 +1288,26 @@ def guardar_pesos(request: GuardarPesosRequest):
         if not conexion:
             return {"success": False, "mensaje": "Error de conexión a la BD"}
             
-        cursor = conexion.cursor()
+        # Agregamos dictionary=True para poder leer los nombres de las columnas
+        cursor = conexion.cursor(dictionary=True)
 
-        # PASO A: Borramos los pesos viejos de ese mismo ejercicio ese mismo día.
-        # (Esto es un "truco" por si el alumno se equivoca, corrige el peso y vuelve a apretar "Guardar")
+        # 💡 MAGIA: Buscamos el id_plan real del alumno directamente en la base de datos
+        cursor.execute("SELECT id_plan FROM usuarios WHERE id = %s", (request.id_alumno,))
+        alumno_db = cursor.fetchone()
+        
+        if not alumno_db or not alumno_db['id_plan']:
+            return {"success": False, "mensaje": "El alumno no tiene un plan activo asignado."}
+            
+        id_plan_real = alumno_db['id_plan']
+
+        # PASO A: Borramos los pesos viejos usando el id_plan_real
         sql_delete = """
         DELETE FROM registro_pesos 
         WHERE id_alumno = %s AND id_plan = %s AND id_ejercicio = %s AND numero_semana = %s AND numero_dia = %s
         """
-        cursor.execute(sql_delete, (request.id_alumno, request.id_plan, request.id_ejercicio, request.numero_semana, request.numero_dia))
+        cursor.execute(sql_delete, (request.id_alumno, id_plan_real, request.id_ejercicio, request.numero_semana, request.numero_dia))
 
-        # PASO B: Insertamos fila por fila los pesos de cada cajita (S1, S2, etc.)
+        # PASO B: Insertamos los pesos nuevos
         sql_insert = """
         INSERT INTO registro_pesos 
         (id_alumno, id_plan, id_ejercicio, numero_semana, numero_dia, numero_serie, reps_realizadas, peso_usado)
@@ -1306,11 +1315,11 @@ def guardar_pesos(request: GuardarPesosRequest):
         """
         
         for serie in request.series:
-            # Solo guardamos si el alumno le puso un peso mayor a 0 (por si dejó alguna cajita vacía)
+            # Solo guardamos si el alumno anotó más de 0 kg
             if serie.peso_usado > 0:
                 cursor.execute(sql_insert, (
                     request.id_alumno, 
-                    request.id_plan, 
+                    id_plan_real, # Usamos el ID seguro que encontramos en MySQL
                     request.id_ejercicio, 
                     request.numero_semana, 
                     request.numero_dia, 
