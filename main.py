@@ -1425,3 +1425,33 @@ def completar_sesion(request: CompletarSesionRequest):
     except Exception as e:
         print(f"❌ Error al completar sesión: {e}")
         return {"success": False, "mensaje": str(e)}
+    
+@app.get("/alumno/dias_completados/{alumno_id}")
+def obtener_dias_completados(alumno_id: int):
+    try:
+        conexion = database.obtener_conexion()
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Buscamos qué plan está haciendo el alumno
+        cursor.execute("SELECT id_plan FROM usuarios WHERE id = %s", (alumno_id,))
+        alumno = cursor.fetchone()
+        
+        if not alumno or not alumno['id_plan']:
+            return {"success": True, "dias": []}
+            
+        # Buscamos todos los días que ya marcó como terminados en ese plan
+        cursor.execute("""
+            SELECT numero_semana, numero_dia 
+            FROM sesiones_completadas 
+            WHERE id_alumno = %s AND id_plan = %s
+        """, (alumno_id, alumno['id_plan']))
+        
+        dias_completados = cursor.fetchall()
+        
+        cursor.close()
+        conexion.close()
+        
+        return {"success": True, "dias": dias_completados}
+    except Exception as e:
+        print(f"❌ Error al obtener días completados: {e}")
+        return {"success": False, "dias": []}
